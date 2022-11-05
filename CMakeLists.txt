@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.6.0)
 
 project(SurfelMapping)
 
+set(CMAKE_CXX_STANDARD 14)
+
 #set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/Shaders" CACHE PATH "Where the shaders live")
@@ -52,6 +54,7 @@ add_library(surfelmapping SHARED
 target_link_libraries(surfelmapping
         ${Eigen_LIBRARIES}
         ${Pangolin_LIBRARIES}
+        ${OpenCV_LIBS}
 )
 
 add_library(surmap_gui SHARED
