@@ -1,6 +1,6 @@
 
 #version 330 core
-
+// point position
 layout (location = 0) in vec2 texcoord;
 
 out vec4 vPosition;
@@ -62,7 +62,7 @@ void main()
     float x = texcoord.x * cols;
     float y = texcoord.y * rows;
 
-    // unit plane coordinates
+    // unit plane coordinates, change into the cam coordinate
     float xl = (x - cam.x) * cam.z;
     float yl = (y - cam.y) * cam.w;
 
@@ -77,7 +77,7 @@ void main()
     float subpix_size_x = 1.0f / (cols * scale);
     float subpix_size_y = 1.0f / (rows * scale);
 
-    // intensity of this pixel
+    // intensity of this pixel, drSampler is depth image's tid
     float value = float(texture(drSampler, texcoord));
 
 
@@ -103,12 +103,12 @@ void main()
         //float c_n = confidence(maxRadDist2, x, y, 1.0);
         float c_n = 0.9;
 
-        // color
+        // color, cSampler is rgb's tid
         vec4 texColor = textureLod(cSampler, texcoord.xy, 0.0);
         vec3 color_n = texColor.xyz;
         float radii_n = getRadius(vPosLocal.z, vNormLocal.z);
 
-        // semantic
+        // semantic, sSampler is semantic's tid
         uint sem_n = uint(texture(sSampler, texcoord.xy));
 
 
@@ -150,9 +150,9 @@ void main()
 
                     if(sem_n == sem_o && abs(vertConf.z * lambda - vPosLocal.z * lambda) <= fuseThresh)  // eyesight ray depth test // todo threshold
                     {
-                        float dist = length(cross(ray, vertConf.xyz)) / length(ray);  // eyesight ray distance test
+                        float dist = length(cross(ray, vertConf.xyz)) / length(ray);  // eyesight ray distance test(projection to ray)
 
-                        vec4 normRad = textureLod(normRadSampler, vec2(sub_x, sub_y), 0.0);
+                        vec4 normRad = textureLod(normRadSampler, vec2(sub_x, sub_y), 0.0); // normal vector
 
                         // closest                                                        28 degree
                         if(dist < bestDist && abs(angleBetween(normRad.xyz, vNormLocal.xyz)) < 0.5f)  // todo consider color

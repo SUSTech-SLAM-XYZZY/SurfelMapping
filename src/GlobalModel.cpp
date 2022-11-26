@@ -230,7 +230,7 @@ void GlobalModel::dataAssociate(const Eigen::Matrix4f &pose,
                                 const int &time,
                                 GPUTexture *rgb,
                                 GPUTexture *depthRaw,
-                                GPUTexture * semantic,
+                                GPUTexture *semantic,
                                 GPUTexture *indexMap,
                                 GPUTexture *vertConfMap,
                                 GPUTexture *colorTimeMap,
@@ -240,7 +240,7 @@ void GlobalModel::dataAssociate(const Eigen::Matrix4f &pose,
 {
     TICK("Data::Association");
 
-    //This part computes new vertices the vertices to merge with, storing
+    //This part computes new vertices and the vertices to merge with, storing
     //in an array that sets which vertices to update by index
     dataProgram->Bind();
 
@@ -284,7 +284,7 @@ void GlobalModel::dataAssociate(const Eigen::Matrix4f &pose,
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, semantic->texture->tid);
-
+    // pixel -> Surfel (indexMap)
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, indexMap->texture->tid);
 
