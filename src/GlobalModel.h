@@ -100,10 +100,28 @@ public:
 
     void clearBuffer(GLuint buffer, GLfloat value);
 
+    void getSurfelModelData();
+
+    void getVertexDataFromBuffer(GLuint buffer, int vcount);
+
+    void getLocalSurfelModel(const Eigen::Matrix4f & pose,
+                              const int & time,
+                              GPUTexture * rgb,
+                              GPUTexture * depthRaw,
+                              GPUTexture * semantic,
+                              GPUTexture * indexMap,
+                              GPUTexture * vertConfMap,
+                              GPUTexture * colorTimeMap,
+                              GPUTexture * normRadMap,
+                              float depthMin,
+                              float depthMax);
+
 private:
     GLuint modelVbo, modelFid;;                    // whole surfel buffer & its feedback ID
     // standby bits holds the ID
     GLuint dataVbo, dataFid;                       // including updated surfel and new unstable surfel
+
+    GLuint lsmVbo, lsmFid;                          // including new unstable surfel
 
     GLuint conflictVbo, conflictFid;
 
@@ -121,6 +139,7 @@ private:
     std::shared_ptr<Shader> initProgram;
     std::shared_ptr<Shader> modelProgram;
     std::shared_ptr<Shader> dataProgram;            // data association
+    std::shared_ptr<Shader> genLSMProgram;          // generate LSM Model
     std::shared_ptr<Shader> conflictProgram;        // check conflict
     std::shared_ptr<Shader> fuseProgram;            // update fused model
     std::shared_ptr<Shader> updateConflictProgram; // update conflict model

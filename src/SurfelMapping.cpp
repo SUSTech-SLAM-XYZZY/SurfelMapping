@@ -118,7 +118,7 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
                                  const Eigen::Matrix4f *gtPose)
 {
     TICK("Run");
-
+    // set the texture rgb & depth & semantic to now image
     textures[GPUTexture::RGB]->texture->Upload(rgb, GL_RGB, GL_UNSIGNED_BYTE);
 
     if(depth)
@@ -196,6 +196,18 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
         TICK("indexMap");
         indexMap.predictIndices(currPose, tick, globalModel.getModel(), farClipDepth, 200);
         TOCK("indexMap");
+
+        globalModel.getLocalSurfelModel(currPose,
+                                        tick,
+                                        textures[GPUTexture::RGB],
+                                        textures[GPUTexture::DEPTH_METRIC],
+                                        textures[GPUTexture::SEMANTIC],
+                                        indexMap.indexTex(),
+                                        indexMap.vertConfTex(),
+                                        indexMap.colorTimeTex(),
+                                        indexMap.normalRadTex(),
+                                        nearClipDepth,
+                                        farClipDepth);
 
         globalModel.dataAssociate(currPose,
                                   tick,

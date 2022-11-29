@@ -39,7 +39,7 @@ file(GLOB utils_srcs src/Utils/*.cpp)
 include_directories(
         ${Pangolin_INCLUDE_DIRS}
         ${EIGEN_INCLUDE_DIRS}
-        ${OpenCV_INCLUDE_DIR}
+        ${OpenCV_INCLUDE_DIRS}
         gui
 )
 

@@ -14,6 +14,7 @@ GlobalModel::GlobalModel()
    initProgram(loadProgramFromFile("init_unstable.vert")),
    modelProgram(loadProgramFromFile("map.vert", "map.frag")),
    dataProgram(loadProgramGeomFromFile("data.vert", "data.geom")),
+   genLSMProgram(loadProgramGeomFromFile("genLSM.vert", "genLSM.geom")),
    conflictProgram(loadProgramGeomFromFile("conflict.vert", "conflict.geom")),
    fuseProgram(loadProgramFromFile("fuse.vert", "fuse.frag")),
    updateConflictProgram(loadProgramFromFile("update_conf.vert", "update_conf.frag")),
@@ -38,6 +39,12 @@ GlobalModel::GlobalModel()
     glGenTransformFeedbacks(1, &dataFid);
     glGenBuffers(1, &dataVbo);
     glBindBuffer(GL_ARRAY_BUFFER, dataVbo);
+    glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenTransformFeedbacks(1, &lsmFid);
+    glGenBuffers(1, &lsmVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, lsmVbo);
     glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -122,6 +129,16 @@ GlobalModel::GlobalModel()
             };
     glTransformFeedbackVaryingsNV(dataProgram->programId(), 3, dataUpdate, GL_INTERLEAVED_ATTRIBS);
     dataProgram->Unbind();
+
+    genLSMProgram->Bind();
+    int lsmModule[3] =
+            {
+                    glGetVaryingLocationNV(genLSMProgram->programId(), "vPosition0"),
+                    glGetVaryingLocationNV(genLSMProgram->programId(), "vColor0"),
+                    glGetVaryingLocationNV(genLSMProgram->programId(), "vNormRad0")
+            };
+    glTransformFeedbackVaryingsNV(genLSMProgram->programId(), 3, lsmModule, GL_INTERLEAVED_ATTRIBS);
+    genLSMProgram->Unbind();
 
     conflictProgram->Bind();
     int conflictUpdate[2] =
@@ -271,7 +288,7 @@ void GlobalModel::dataAssociate(const Eigen::Matrix4f &pose,
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     glEnable(GL_RASTERIZER_DISCARD);
-
+    // use GPU to accerlate the progress
     glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, dataFid);
     //glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, dataVbo);
     glTransformFeedbackBufferBase(dataFid, 0, dataVbo);
@@ -987,3 +1004,165 @@ bool GlobalModel::uploadMap(const std::string &model_path, std::vector<int> &sta
 
     return true;
 }
+
+void GlobalModel::getSurfelModelData(){
+    float * vertices = new float[count * sizeof(float) * 12];
+
+    memset(vertices, 0, count * sizeof(float) * 12);
+
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, modelVbo);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, count * sizeof(float) * 12, vertices);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
+
+//    glFinish();
+
+    CheckGlDieOnError()
+
+    // vertex Position 4 float          vertex Color 4 float            vertex NormRad 4 float
+    // Position x -> x-axis
+    // Position y -> y-axis
+    // Position z -> depth
+    // Position w -> confidence
+    // Color x -> color (encoded)
+    // Color y -> marks as the ID of model surfel to be updated
+    // Color z -> old time
+    // Color w -> time / tick
+    // NormRad x -> x-axis
+    // NormRad y -> y-axis
+    // NormRad z -> depth/z-axis
+    // NormRad w -> radius
+
+    delete [] vertices;
+}
+
+void GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
+    float * vertices = new float[count * sizeof(float) * 12];
+
+    memset(vertices, 0, count * sizeof(float) * 12);
+
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, buffer);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vcount * sizeof(float) * 12, vertices);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
+
+//    glFinish();
+
+    CheckGlDieOnError()
+
+    // vertex Position 4 float          vertex Color 4 float            vertex NormRad 4 float
+    // Position x -> x-axis
+    // Position y -> y-axis
+    // Position z -> depth
+    // Position w -> confidence
+    // Color x -> color (encoded)
+    // Color y -> marks as the ID of model surfel to be updated
+    // Color z -> old time
+    // Color w -> time / tick
+    // NormRad x -> x-axis
+    // NormRad y -> y-axis
+    // NormRad z -> depth/z-axis
+    // NormRad w -> radius
+
+    delete [] vertices;
+}
+
+void GlobalModel::getLocalSurfelModel(const Eigen::Matrix4f & pose,
+                                      const int & time,
+                                      GPUTexture * rgb,
+                                      GPUTexture * depthRaw,
+                                      GPUTexture * semantic,
+                                      GPUTexture * indexMap,
+                                      GPUTexture * vertConfMap,
+                                      GPUTexture * colorTimeMap,
+                                      GPUTexture * normRadMap,
+                                      float depthMin,
+                                      float depthMax){
+    TICK("Data::GetLSM");
+
+    //This part computes new vertices and the vertices to merge with, storing
+    //in an array that sets which vertices to update by index
+    genLSMProgram->Bind();
+
+    genLSMProgram->setUniform(Uniform("cSampler", 0));
+    genLSMProgram->setUniform(Uniform("drSampler", 1));
+    genLSMProgram->setUniform(Uniform("sSampler", 2));
+    genLSMProgram->setUniform(Uniform("indexSampler", 3));
+    genLSMProgram->setUniform(Uniform("vertConfSampler", 4));
+    genLSMProgram->setUniform(Uniform("colorTimeSampler", 5));
+    genLSMProgram->setUniform(Uniform("normRadSampler", 6));
+    genLSMProgram->setUniform(Uniform("time", (float)time));
+
+    genLSMProgram->setUniform(Uniform("cam", Eigen::Vector4f(Config::cx(),
+                                                           Config::cy(),
+                                                           1.0 / Config::fx(),
+                                                           1.0 / Config::fy())));
+    genLSMProgram->setUniform(Uniform("cols", (float)Config::W()));
+    genLSMProgram->setUniform(Uniform("rows", (float)Config::H()));
+    genLSMProgram->setUniform(Uniform("scale", IndexMap::FACTOR));
+    genLSMProgram->setUniform(Uniform("texDim", (float)TEXTURE_DIMENSION));
+    genLSMProgram->setUniform(Uniform("pose", pose));
+    genLSMProgram->setUniform(Uniform("minDepth", depthMin));
+    genLSMProgram->setUniform(Uniform("maxDepth", depthMax));
+    genLSMProgram->setUniform(Uniform("fuseThresh", Config::surfelFuseDistanceThreshFactor()));
+
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, uvo);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    // use GPU to accerlate the progress
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, lsmFid);
+    //glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, dataVbo);
+    glTransformFeedbackBufferBase(lsmFid, 0, lsmVbo);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, rgb->texture->tid);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthRaw->texture->tid);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, semantic->texture->tid);
+    // pixel -> Surfel (indexMap)
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, indexMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, vertConfMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE5);
+    glBindTexture(GL_TEXTURE_2D, colorTimeMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_2D, normRadMap->texture->tid);
+
+    glBeginTransformFeedback(GL_POINTS);
+
+    glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, countQuery);
+    unsigned int vertexCount = 0;
+
+    glDrawArrays(GL_POINTS, 0, uvSize);
+
+    glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &vertexCount);
+
+    glEndTransformFeedback();
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+
+    glDisable(GL_RASTERIZER_DISCARD);
+
+    glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    genLSMProgram->Unbind();
+
+    glFinish();
+
+    TOCK("Data::GetLSM");
+
+    CheckGlDieOnError()
+}
+
