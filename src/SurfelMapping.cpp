@@ -148,7 +148,7 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
         refFrameIsSet = true;
 
         historyPoses.push_back(currPose);
-        ++tick;
+        ++tick; // why int?
 
         return;
     }
@@ -248,6 +248,7 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
     TOCK("Run");
 }
 
+// convert to metric unit
 void SurfelMapping::metriciseDepth()
 {
     std::vector<Uniform> uniforms;
@@ -262,6 +263,7 @@ void SurfelMapping::metriciseDepth()
                                                &uniforms);
 }
 
+// optimize the edges & filter the unwanted semantic classes
 void SurfelMapping::filterDepth()
 {
     // filter unwanted classes and bad edges

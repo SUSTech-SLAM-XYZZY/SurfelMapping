@@ -24,6 +24,12 @@
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/opengl_render_state.h>
 
+
+/**
+ * Easy FeedbackBuffer Class to
+ * 1. bind textures
+ * 2. render surfel/points
+ */
 class FeedbackBuffer
 {
     public:
