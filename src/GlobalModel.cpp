@@ -862,6 +862,11 @@ std::pair<GLuint, GLuint> GlobalModel::getModel()
     return {modelVbo, count};
 }
 
+std::pair<GLuint, GLuint> GlobalModel::getLocalModel()
+{
+    return {lsmVbo, lsmcount};
+}
+
 std::pair<GLuint, GLuint> GlobalModel::getData()
 {
     return {dataVbo, dataCount};
@@ -1036,15 +1041,16 @@ void GlobalModel::getSurfelModelData(){
 }
 
 void GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
-    float * vertices = new float[count * sizeof(float) * 12];
+    // 12 means 12 float, 4-4-4
+    float * vertices = new float[vcount * sizeof(float) * 12];
 
-    memset(vertices, 0, count * sizeof(float) * 12);
+    memset(vertices, 0, vcount * sizeof(float) * 12);
 
     glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, buffer);
     glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vcount * sizeof(float) * 12, vertices);
     glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
 
-//    glFinish();
+    glFinish();
 
     CheckGlDieOnError()
 
@@ -1062,6 +1068,9 @@ void GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
     // NormRad z -> depth/z-axis
     // NormRad w -> radius
 
+    Eigen::MatrixXf vertex;
+    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
+    vertex.block(0,0, vcount, 3);
     delete [] vertices;
 }
 
@@ -1138,12 +1147,12 @@ void GlobalModel::getLocalSurfelModel(const Eigen::Matrix4f & pose,
     glBeginTransformFeedback(GL_POINTS);
 
     glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, countQuery);
-    unsigned int vertexCount = 0;
+    lsmcount = 0;
 
     glDrawArrays(GL_POINTS, 0, uvSize);
 
     glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
-    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &vertexCount);
+    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &lsmcount);
 
     glEndTransformFeedback();
 

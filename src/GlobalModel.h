@@ -11,6 +11,7 @@
 #include "Utils/Stopwatch.h"
 #include <pangolin/gl/gl.h>
 #include <Eigen/LU>
+#include <Eigen/Dense>
 
 class GlobalModel
 {
@@ -90,6 +91,8 @@ public:
 
     std::pair<GLuint, GLuint> getModel();
 
+    std::pair<GLuint, GLuint> getLocalModel();
+
     std::pair<GLuint, GLuint> getData();
 
     std::pair<GLuint, GLuint> getConflict();
@@ -131,6 +134,7 @@ private:
 
     GLuint countQuery;
     unsigned int count;           // current model num
+    unsigned int lsmcount;
     unsigned int offset;
     unsigned int dataCount;
     unsigned int conflictCount;

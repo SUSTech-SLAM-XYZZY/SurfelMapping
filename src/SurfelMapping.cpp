@@ -223,12 +223,14 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
 
 //        std::cout << "Data Association Num: " << globalModel.getData().second << '\n';
 
+        // fliter out the surfel element need to fused & update them to the global surfel Model
         globalModel.updateFuse();
 
         globalModel.backMapping();
 
 //        std::cout << "Model Num after Update Fuse: " << globalModel.getModel().second << '\n';
 
+        // fliter out the new surfel element & concate the new unstable surfel model to global surfel model
         globalModel.concatenate();
 
 //        std::cout << "New Model Num: " << globalModel.getUnstable().second << '\n'
