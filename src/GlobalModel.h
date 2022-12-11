@@ -93,6 +93,8 @@ public:
 
     std::pair<GLuint, GLuint> getLocalModel();
 
+    std::pair<GLuint, GLuint> getGSMView();
+
     std::pair<GLuint, GLuint> getData();
 
     std::pair<GLuint, GLuint> getConflict();
@@ -105,7 +107,7 @@ public:
 
     void getSurfelModelData();
 
-    void getVertexDataFromBuffer(GLuint buffer, int vcount);
+    float * getVertexDataFromBuffer(GLuint buffer, int vcount);
 
     void getLocalSurfelModel(const Eigen::Matrix4f & pose,
                               const int & time,
@@ -119,12 +121,22 @@ public:
                               float depthMin,
                               float depthMax);
 
+    void getGlobalSurfelInView(const Eigen::Matrix4f & pose,
+                                 GPUTexture * indexMap,
+                                 GPUTexture * vertConfMap,
+                                 GPUTexture * colorTimeMap,
+                                 GPUTexture * normRadMap);
+
+    void ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, int LSMcount);
+
 private:
     GLuint modelVbo, modelFid;;                    // whole surfel buffer & its feedback ID
     // standby bits holds the ID
     GLuint dataVbo, dataFid;                       // including updated surfel and new unstable surfel
 
     GLuint lsmVbo, lsmFid;                          // including new unstable surfel
+
+    GLuint gsmViewVbo, gsmViewFid;                  // including the vertex in GSM one view
 
     GLuint conflictVbo, conflictFid;
 
@@ -135,6 +147,7 @@ private:
     GLuint countQuery;
     unsigned int count;           // current model num
     unsigned int lsmcount;
+    unsigned int gsmViewcount;
     unsigned int offset;
     unsigned int dataCount;
     unsigned int conflictCount;
@@ -144,6 +157,7 @@ private:
     std::shared_ptr<Shader> modelProgram;
     std::shared_ptr<Shader> dataProgram;            // data association
     std::shared_ptr<Shader> genLSMProgram;          // generate LSM Model
+    std::shared_ptr<Shader> getGSMViewProgram;      // get the view from GSM Model
     std::shared_ptr<Shader> conflictProgram;        // check conflict
     std::shared_ptr<Shader> fuseProgram;            // update fused model
     std::shared_ptr<Shader> updateConflictProgram; // update conflict model

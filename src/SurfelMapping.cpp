@@ -209,6 +209,13 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
                                         nearClipDepth,
                                         farClipDepth);
 
+        globalModel.getGlobalSurfelInView(currPose,
+                                          indexMap.indexTex(),
+                                          indexMap.vertConfTex(),
+                                          indexMap.colorTimeTex(),
+                                          indexMap.normalRadTex());
+
+
         globalModel.dataAssociate(currPose,
                                   tick,
                                   textures[GPUTexture::RGB],

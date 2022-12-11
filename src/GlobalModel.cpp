@@ -15,6 +15,7 @@ GlobalModel::GlobalModel()
    modelProgram(loadProgramFromFile("map.vert", "map.frag")),
    dataProgram(loadProgramGeomFromFile("data.vert", "data.geom")),
    genLSMProgram(loadProgramGeomFromFile("genLSM.vert", "genLSM.geom")),
+   getGSMViewProgram(loadProgramGeomFromFile("gsmView.vert", "gsmView.geom")),
    conflictProgram(loadProgramGeomFromFile("conflict.vert", "conflict.geom")),
    fuseProgram(loadProgramFromFile("fuse.vert", "fuse.frag")),
    updateConflictProgram(loadProgramFromFile("update_conf.vert", "update_conf.frag")),
@@ -45,6 +46,12 @@ GlobalModel::GlobalModel()
     glGenTransformFeedbacks(1, &lsmFid);
     glGenBuffers(1, &lsmVbo);
     glBindBuffer(GL_ARRAY_BUFFER, lsmVbo);
+    glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenTransformFeedbacks(1, &gsmViewFid);
+    glGenBuffers(1, &gsmViewVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, gsmViewVbo);
     glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -140,6 +147,16 @@ GlobalModel::GlobalModel()
     glTransformFeedbackVaryingsNV(genLSMProgram->programId(), 3, lsmModule, GL_INTERLEAVED_ATTRIBS);
     genLSMProgram->Unbind();
 
+    getGSMViewProgram->Bind();
+    int gsmViewModule[3] =
+            {
+                    glGetVaryingLocationNV(getGSMViewProgram->programId(), "vPosition0"),
+                    glGetVaryingLocationNV(getGSMViewProgram->programId(), "vColor0"),
+                    glGetVaryingLocationNV(getGSMViewProgram->programId(), "vNormRad0")
+            };
+    glTransformFeedbackVaryingsNV(getGSMViewProgram->programId(), 3, gsmViewModule, GL_INTERLEAVED_ATTRIBS);
+    getGSMViewProgram->Unbind();
+
     conflictProgram->Bind();
     int conflictUpdate[2] =
             {
@@ -182,6 +199,12 @@ GlobalModel::~GlobalModel()
 
     glDeleteTransformFeedbacks(1, &dataFid);
     glDeleteBuffers(1, &dataVbo);
+
+    glDeleteTransformFeedbacks(1, &lsmFid);
+    glDeleteBuffers(1, &lsmVbo);
+
+    glDeleteTransformFeedbacks(1, &gsmViewFid);
+    glDeleteBuffers(1, &gsmViewVbo);
 
     glDeleteQueries(1, &countQuery);
 
@@ -765,6 +788,10 @@ void GlobalModel::resetBuffer()
     dataCount = 0;
     clearBuffer(conflictVbo, 0.f);
     conflictCount = 0;
+    clearBuffer(lsmVbo, 0.f);
+    lsmcount = 0;
+    clearBuffer(gsmViewVbo, 0.f);
+    gsmViewcount = 0;
     clearBuffer(unstableVbo, 0.f);
     unstableCount = 0;
 }
@@ -865,6 +892,11 @@ std::pair<GLuint, GLuint> GlobalModel::getModel()
 std::pair<GLuint, GLuint> GlobalModel::getLocalModel()
 {
     return {lsmVbo, lsmcount};
+}
+
+std::pair<GLuint, GLuint> GlobalModel::getGSMView()
+{
+    return {gsmViewVbo, gsmViewcount};
 }
 
 std::pair<GLuint, GLuint> GlobalModel::getData()
@@ -1040,7 +1072,7 @@ void GlobalModel::getSurfelModelData(){
     delete [] vertices;
 }
 
-void GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
+float * GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
     // 12 means 12 float, 4-4-4
     float * vertices = new float[vcount * sizeof(float) * 12];
 
@@ -1068,10 +1100,15 @@ void GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
     // NormRad z -> depth/z-axis
     // NormRad w -> radius
 
-    Eigen::MatrixXf vertex;
-    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
-    vertex.block(0,0, vcount, 3);
-    delete [] vertices;
+    // for debug
+//    Eigen::MatrixXf vertex;
+//    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
+
+//    std::ofstream fout("matrixTest", std::ios::app);
+//    fout << vertex << std::endl;
+//    fout.flush();
+
+    return vertices;
 }
 
 void GlobalModel::getLocalSurfelModel(const Eigen::Matrix4f & pose,
@@ -1175,3 +1212,98 @@ void GlobalModel::getLocalSurfelModel(const Eigen::Matrix4f & pose,
     CheckGlDieOnError()
 }
 
+void GlobalModel::getGlobalSurfelInView(const Eigen::Matrix4f & pose,
+                                        GPUTexture * indexMap,
+                                        GPUTexture * vertConfMap,
+                                        GPUTexture * colorTimeMap,
+                                        GPUTexture * normRadMap){
+    TICK("Data::GetGlobalView");
+
+    //This part computes new vertices and the vertices to merge with, storing
+    //in an array that sets which vertices to update by index
+    getGSMViewProgram->Bind();
+
+    getGSMViewProgram->setUniform(Uniform("indexSampler", 0));
+    getGSMViewProgram->setUniform(Uniform("vertConfSampler", 1));
+    getGSMViewProgram->setUniform(Uniform("colorTimeSampler", 2));
+    getGSMViewProgram->setUniform(Uniform("normRadSampler", 3));
+
+    getGSMViewProgram->setUniform(Uniform("pose", pose));
+
+
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, uvo);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    // use GPU to accerlate the progress
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, gsmViewFid);
+    //glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, dataVbo);
+    glTransformFeedbackBufferBase(gsmViewFid, 0, gsmViewVbo);
+
+    // pixel -> Surfel (indexMap)
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, indexMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, vertConfMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, colorTimeMap->texture->tid);
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, normRadMap->texture->tid);
+
+    glBeginTransformFeedback(GL_POINTS);
+
+    glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, countQuery);
+    gsmViewcount = 0;
+
+    glDrawArrays(GL_POINTS, 0, uvSize);
+
+    glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &gsmViewcount);
+
+    glEndTransformFeedback();
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+
+    glDisable(GL_RASTERIZER_DISCARD);
+
+    glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    getGSMViewProgram->Unbind();
+
+    glFinish();
+
+    TOCK("Data::GetGlobalView");
+
+    CheckGlDieOnError()
+}
+
+void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, int LSMcount) {
+
+    // vertex Position 4 float          vertex Color 4 float            vertex NormRad 4 float
+    // Position x -> x-axis
+    // Position y -> y-axis
+    // Position z -> depth
+    // Position w -> confidence
+    // Color x -> color (encoded)
+    // Color y -> marks as the ID of model surfel to be updated
+    // Color z -> old time
+    // Color w -> time / tick
+    // NormRad x -> x-axis
+    // NormRad y -> y-axis
+    // NormRad z -> depth/z-axis
+    // NormRad w -> radius
+
+    float * GSMView = this->getVertexDataFromBuffer(GlobalSurfelInView, ViewCount);
+    float * LSM = this->getVertexDataFromBuffer(LSModel, LSMcount);
+    Eigen::MatrixXf GSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(GSMView, ViewCount, 12);
+    Eigen::MatrixXf LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12);
+    
+}
