@@ -9,6 +9,7 @@
 #include "GPUTexture.h"
 #include "IndexMap.h"
 #include "Utils/Stopwatch.h"
+#include "Utils/kdtree.hpp"
 #include <pangolin/gl/gl.h>
 #include <Eigen/LU>
 #include <Eigen/Dense>

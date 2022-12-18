@@ -215,6 +215,8 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
                                           indexMap.colorTimeTex(),
                                           indexMap.normalRadTex());
 
+        globalModel.ICP(globalModel.getGSMView().first, globalModel.getGSMView().second, globalModel.getLocalModel().first, globalModel.getLocalModel().second);
+
 
         globalModel.dataAssociate(currPose,
                                   tick,

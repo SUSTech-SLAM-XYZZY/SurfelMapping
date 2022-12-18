@@ -1300,10 +1300,95 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     // NormRad y -> y-axis
     // NormRad z -> depth/z-axis
     // NormRad w -> radius
+    TICK("Data::ICP");
+    if(ViewCount == 0 || LSMcount == 0)return;
 
     float * GSMView = this->getVertexDataFromBuffer(GlobalSurfelInView, ViewCount);
     float * LSM = this->getVertexDataFromBuffer(LSModel, LSMcount);
-    Eigen::MatrixXf GSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(GSMView, ViewCount, 12);
-    Eigen::MatrixXf LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12);
-    
+    Eigen::MatrixXd GSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(GSMView, ViewCount, 12).cast<double>();
+    Eigen::MatrixXd LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12).cast<double>();
+    const int leaf_size = 5;
+
+    Eigen::MatrixXd GSMvertexData = GSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
+    Eigen::MatrixXd LSMvertexData = LSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
+    Eigen::MatrixXd LSMvertexDataAfterTrans = LSMvertexData;
+    NNSearch::KDTree kdtree(GSMvertexData, leaf_size);
+
+    int iter_max = 1000;
+    float err_max = 0.5;
+    std::vector<int> paired_points_GSM;
+    std::vector<int> paired_points_LSM;
+    std::vector<int> unstabled_points;
+
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(3, 3);
+    Eigen::VectorXd T(3);
+    T << 0, 0, 0;
+
+    for(int iter = 0; iter < iter_max; iter++) {
+//        assert(R.rows() == LSMvertexData.transpose().rows() && R.cols() == LSMvertexData.transpose().cols());
+        LSMvertexDataAfterTrans = ((R * LSMvertexDataAfterTrans.transpose()).colwise() + T) .transpose();
+        Eigen::MatrixXd LSMvertexData_ = LSMvertexDataAfterTrans;
+        // now need to pair each points
+        for (int i = 0; i < LSMvertexData_.rows(); i++) {
+            auto row_i = LSMvertexData_.row(i);
+            Eigen::Vector3d point;
+            point << row_i.x(), row_i.y(), row_i.z();   // use xyz first
+
+            int k = 1; // only search 1 nearest point
+            std::vector<int> pts_idx;
+            std::vector<double> pts_dist;
+
+            kdtree.knnSearch(point, k, pts_idx, pts_dist);
+            if (pts_dist.empty() || pts_dist.at(0) > 1){
+                kdtree.pop(pts_idx.at(0));
+                unstabled_points.push_back(i);
+            }
+            else{
+                paired_points_GSM.push_back(pts_idx.at(0));
+                paired_points_LSM.push_back(i);
+            }
+        }
+        // let the rm_set empty
+        kdtree.reset_rm_set();
+        std::cout << "paired points=" << paired_points_LSM.size() << std::endl;
+
+        Eigen::MatrixXd GSMvertexData_ = GSMvertexData(paired_points_GSM, Eigen::placeholders::all);
+        LSMvertexData_ = LSMvertexData_(paired_points_LSM, Eigen::placeholders::all);
+
+        // Centroid of the row vectors
+        Eigen::Vector3d GSM_C = GSMvertexData_.colwise().mean();
+        Eigen::Vector3d LSM_C = LSMvertexData_.colwise().mean();
+        // sub the centroid
+        Eigen::MatrixXd GSMvertexDataNoC = GSMvertexData_.rowwise() - GSM_C.transpose();
+        Eigen::MatrixXd LSMvertexDataNoC = LSMvertexData_.rowwise() - LSM_C.transpose();
+        // calc R
+        Eigen::MatrixXd W = LSMvertexDataNoC.transpose() * GSMvertexDataNoC;
+        // SVD on W
+        Eigen::JacobiSVD<Eigen::Matrix3d> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
+        Eigen::Matrix3d U = svd.matrixU();
+        Eigen::Matrix3d V = svd.matrixV();
+        Eigen::Matrix3d Vt = V.transpose();
+//        std::cout << "U=" << U << std::endl;
+//        std::cout << "V=" << V << std::endl;
+
+        Eigen::Matrix3d R_ = Vt.transpose() * U.transpose();
+
+        if (R_.determinant() < 0 ){
+            Vt.block<1,3>(2,0) *= -1;
+            R_ = Vt.transpose() * U.transpose();
+        }
+
+        Eigen::Vector3d T_ = GSM_C - R_ * LSM_C;
+
+        Eigen::MatrixXd err = (R_ * LSMvertexData_.transpose()).colwise() + T_ - GSMvertexData_.transpose();
+        float errf = (err.cwiseProduct(err)).sum() / paired_points_LSM.size();
+
+        R = R_;
+        T = T_;
+        std::cout << "R=" << R << std::endl;
+        std::cout << "T=" << T << std::endl;
+
+        std::cout << "avg_error=" << errf << std::endl;
+    }
+    TOCK("Data::ICP");
 }
