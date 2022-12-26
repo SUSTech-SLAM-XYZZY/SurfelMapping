@@ -1339,7 +1339,10 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
             std::vector<double> pts_dist;
 
             kdtree.knnSearch(point, k, pts_idx, pts_dist);
-            if (pts_dist.empty() || pts_dist.at(0) > 1){
+            if(pts_dist.empty()){
+                unstabled_points.push_back(i);
+            }
+            else if (pts_dist.at(0) > 1){
                 kdtree.pop(pts_idx.at(0));
                 unstabled_points.push_back(i);
             }
@@ -1362,7 +1365,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         Eigen::MatrixXd GSMvertexDataNoC = GSMvertexData_.rowwise() - GSM_C.transpose();
         Eigen::MatrixXd LSMvertexDataNoC = LSMvertexData_.rowwise() - LSM_C.transpose();
         // calc R
-        Eigen::MatrixXd W = LSMvertexDataNoC.transpose() * GSMvertexDataNoC;
+        Eigen::MatrixXd W = (LSMvertexDataNoC.transpose() * GSMvertexDataNoC).transpose();
         // SVD on W
         Eigen::JacobiSVD<Eigen::Matrix3d> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
         Eigen::Matrix3d U = svd.matrixU();
@@ -1383,12 +1386,28 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         Eigen::MatrixXd err = (R_ * LSMvertexData_.transpose()).colwise() + T_ - GSMvertexData_.transpose();
         float errf = (err.cwiseProduct(err)).sum() / paired_points_LSM.size();
 
+        // clear all the paired points
+        paired_points_LSM.clear();
+        paired_points_GSM.clear();
+        unstabled_points.clear();
+
         R = R_;
         T = T_;
         std::cout << "R=" << R << std::endl;
         std::cout << "T=" << T << std::endl;
 
         std::cout << "avg_error=" << errf << std::endl;
+
+        // output into the file
+//        std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
+//        fout << GSMvertexData_ << std::endl;
+//        fout.flush();
+//        fout.close();
+//
+//        std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
+//        fout_LSM << LSMvertexData_ << std::endl;
+//        fout_LSM.flush();
+//        fout_LSM.close();
     }
     TOCK("Data::ICP");
 }
