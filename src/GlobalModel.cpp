@@ -1313,10 +1313,12 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     Eigen::MatrixXd LSMvertexData = LSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
     Eigen::MatrixXd LSMvertexDataAfterTrans = LSMvertexData;
 
-    NNSearch::KDTree kdtree(GSMvertexData, leaf_size);
+    typedef nanoflann::KDTreeEigenMatrixAdaptor<Eigen::MatrixXd, 3, nanoflann::metric_L1> KDTree;
+    KDTree * kdtree = new KDTree(3, GSMvertexData, 10);
 
     int iter_max = 30;
     float err_max = 0.5;
+    std::map<int, std::pair<int, double>> paired_map;
     std::vector<int> paired_points_GSM;
     std::vector<int> paired_points_LSM;
     std::vector<int> unstabled_points;
@@ -1331,31 +1333,34 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         Eigen::MatrixXd LSMvertexData_ = LSMvertexDataAfterTrans;
         // now need to pair each points
         std::vector<int> point_idx(LSMvertexData_.rows());
-        iota(point_idx.begin(), point_idx.end(), 0);
+        std::iota(point_idx.begin(), point_idx.end(), 0);
         // enter the loop
         while (!point_idx.empty()){
             int i = point_idx.back();
             point_idx.pop_back();
 
             auto row_i = LSMvertexData_.row(i);
-            Eigen::Vector3d point;
-            point << row_i.x(), row_i.y(), row_i.z();   // use xyz first
+            std::vector<double> point;
+            point.push_back(row_i.x());
+            point.push_back(row_i.y());
+            point.push_back(row_i.z()); // use xyz first
 
-            double r = 1; // only search 1m the nearest point
+            double r = 0.1; // only search 1m the nearest point
             std::vector<int> pts_idx;
             std::vector<double> pts_dist;
+            std::vector<nanoflann::ResultItem<long, double>> radius_result;
+            nanoflann::SearchParameters params;
+            const size_t nMatches = kdtree->index_->radiusSearch(&point[0], r, radius_result, params);
 
-            kdtree.radiusSearch(point, r, pts_idx, pts_dist);
-
-            for(int j = 0; j < pts_idx.size(); j++){
-                if(!kdtree.exist_in_paired_map(pts_idx.at(j))){
-                    kdtree.insert_paired_map(pts_idx.at(j), i, pts_dist.at(j));
+            for(int j = 0; j < nMatches; j++){
+                if(paired_map.count((int)radius_result[j].first) != 1){
+                    paired_map.insert(std::make_pair((int)radius_result[j].first, std::make_pair(i, radius_result[j].second)));
                     break;
                 }else {
-                    std::pair<int, double> paired_pts = kdtree.get_paired_pts(pts_idx.at(j));
-                    if (pts_dist.at(j) < paired_pts.second) {
+                    std::pair<int, double> paired_pts = paired_map[(int)radius_result[j].first];
+                    if (radius_result[j].second < paired_pts.second) {
                         point_idx.push_back(paired_pts.first);
-                        kdtree.replace_paired_map(pts_idx.at(j), i, pts_dist.at(j));
+                        paired_map[(int)radius_result[j].first] = std::make_pair(i, radius_result[j].second);
                         break;
                     } else {
                         continue;
@@ -1364,10 +1369,12 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
             }
         }
 
-         kdtree.copy_to_vector(&paired_points_GSM, &paired_points_LSM);
+        for (auto & copyback : paired_map)
+        {
+            paired_points_GSM.push_back(copyback.first);
+            paired_points_LSM.push_back(copyback.second.first);
+        }
 
-        // let the rm_set empty
-        kdtree.reset_paired_map();
         std::cout << "paired points=" << paired_points_LSM.size() << std::endl;
 
         Eigen::MatrixXd GSMvertexData_ = GSMvertexData(paired_points_GSM, Eigen::placeholders::all);
@@ -1380,7 +1387,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         Eigen::MatrixXd GSMvertexDataNoC = GSMvertexData_.rowwise() - GSM_C.transpose();
         Eigen::MatrixXd LSMvertexDataNoC = LSMvertexData_.rowwise() - LSM_C.transpose();
         // calc R
-        Eigen::MatrixXd W = (LSMvertexDataNoC.transpose() * GSMvertexDataNoC).transpose();
+        Eigen::MatrixXd W = LSMvertexDataNoC.transpose() * GSMvertexDataNoC;
         // SVD on W
         Eigen::JacobiSVD<Eigen::Matrix3d> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
         Eigen::Matrix3d U = svd.matrixU();
@@ -1405,6 +1412,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         paired_points_LSM.clear();
         paired_points_GSM.clear();
         unstabled_points.clear();
+        paired_map.clear();
 
         R = R_;
         T = T_;
@@ -1415,12 +1423,12 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
 
         // output into the file
         std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
-        fout << GSMvertexData << std::endl;
+        fout << GSMvertexData_ << std::endl;
         fout.flush();
         fout.close();
 
         std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
-        fout_LSM << LSMvertexDataAfterTrans << std::endl;
+        fout_LSM << LSMvertexData_ << std::endl;
         fout_LSM.flush();
         fout_LSM.close();
     }

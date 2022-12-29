@@ -2,7 +2,7 @@ import open3d
 import matplotlib
 import numpy as np
 
-num = 0
+num = 1
 points_GSM = np.loadtxt("cmake-build-debug/output/GSM_" + str(num))
 points_LSM = np.loadtxt("cmake-build-debug/output/LSM_" + str(num))
 
