@@ -1312,9 +1312,10 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     Eigen::MatrixXd GSMvertexData = GSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
     Eigen::MatrixXd LSMvertexData = LSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
     Eigen::MatrixXd LSMvertexDataAfterTrans = LSMvertexData;
+
     NNSearch::KDTree kdtree(GSMvertexData, leaf_size);
 
-    int iter_max = 1000;
+    int iter_max = 30;
     float err_max = 0.5;
     std::vector<int> paired_points_GSM;
     std::vector<int> paired_points_LSM;
@@ -1329,30 +1330,44 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         LSMvertexDataAfterTrans = ((R * LSMvertexDataAfterTrans.transpose()).colwise() + T) .transpose();
         Eigen::MatrixXd LSMvertexData_ = LSMvertexDataAfterTrans;
         // now need to pair each points
-        for (int i = 0; i < LSMvertexData_.rows(); i++) {
+        std::vector<int> point_idx(LSMvertexData_.rows());
+        iota(point_idx.begin(), point_idx.end(), 0);
+        // enter the loop
+        while (!point_idx.empty()){
+            int i = point_idx.back();
+            point_idx.pop_back();
+
             auto row_i = LSMvertexData_.row(i);
             Eigen::Vector3d point;
             point << row_i.x(), row_i.y(), row_i.z();   // use xyz first
 
-            int k = 1; // only search 1 nearest point
+            double r = 1; // only search 1m the nearest point
             std::vector<int> pts_idx;
             std::vector<double> pts_dist;
 
-            kdtree.knnSearch(point, k, pts_idx, pts_dist);
-            if(pts_dist.empty()){
-                unstabled_points.push_back(i);
-            }
-            else if (pts_dist.at(0) > 1){
-                kdtree.pop(pts_idx.at(0));
-                unstabled_points.push_back(i);
-            }
-            else{
-                paired_points_GSM.push_back(pts_idx.at(0));
-                paired_points_LSM.push_back(i);
+            kdtree.radiusSearch(point, r, pts_idx, pts_dist);
+
+            for(int j = 0; j < pts_idx.size(); j++){
+                if(!kdtree.exist_in_paired_map(pts_idx.at(j))){
+                    kdtree.insert_paired_map(pts_idx.at(j), i, pts_dist.at(j));
+                    break;
+                }else {
+                    std::pair<int, double> paired_pts = kdtree.get_paired_pts(pts_idx.at(j));
+                    if (pts_dist.at(j) < paired_pts.second) {
+                        point_idx.push_back(paired_pts.first);
+                        kdtree.replace_paired_map(pts_idx.at(j), i, pts_dist.at(j));
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
             }
         }
+
+         kdtree.copy_to_vector(&paired_points_GSM, &paired_points_LSM);
+
         // let the rm_set empty
-        kdtree.reset_rm_set();
+        kdtree.reset_paired_map();
         std::cout << "paired points=" << paired_points_LSM.size() << std::endl;
 
         Eigen::MatrixXd GSMvertexData_ = GSMvertexData(paired_points_GSM, Eigen::placeholders::all);
@@ -1399,15 +1414,15 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         std::cout << "avg_error=" << errf << std::endl;
 
         // output into the file
-//        std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
-//        fout << GSMvertexData_ << std::endl;
-//        fout.flush();
-//        fout.close();
-//
-//        std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
-//        fout_LSM << LSMvertexData_ << std::endl;
-//        fout_LSM.flush();
-//        fout_LSM.close();
+        std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
+        fout << GSMvertexData << std::endl;
+        fout.flush();
+        fout.close();
+
+        std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
+        fout_LSM << LSMvertexDataAfterTrans << std::endl;
+        fout_LSM.flush();
+        fout_LSM.close();
     }
     TOCK("Data::ICP");
 }

@@ -71,8 +71,6 @@ namespace NNSearch {
                 _SearchIdxDist(_root, point, result_set);
                 // unpack result
                 result_set.unpackResultSet(pts_idx, pts_dist);
-                // only used in my project
-                _rm_set.insert(pts_idx.begin(),pts_idx.end());
             }
 
             // radius search
@@ -82,22 +80,39 @@ namespace NNSearch {
                 _SearchIdxDist(_root, point, result_set);
                 // unpack result
                 result_set.unpackResultSet(pts_idx, pts_dist);
-                // only used in my project
-                _rm_set.insert(pts_idx.begin(),pts_idx.end());
             }
 
             // reset the _rm_set
-            void reset_rm_set(){
-                _rm_set.clear();
+            void reset_paired_map(){
+                _paired_map.clear();
             }
 
             // get the _rm_set
-            std::set<int> get_rm_set(){
-                return _rm_set;
+            std::map<int, std::pair<int, double>> get_paired_map(){
+                return _paired_map;
             }
 
-            void pop(int pts_idx){
-                _rm_set.erase(pts_idx);
+            std::pair<int, double> get_paired_pts(int pts_idx){
+                return _paired_map[pts_idx];
+            }
+
+            void insert_paired_map(int idx, int paired_idx, double dist){
+                _paired_map.insert(std::make_pair(idx, std::make_pair(paired_idx, dist)));
+            }
+
+            void replace_paired_map(int idx, int paired_idx, double dist){
+                _paired_map[idx] = std::make_pair(paired_idx, dist);
+            }
+
+            bool exist_in_paired_map(int idx){
+                return _paired_map.count(idx) == 1;
+            }
+
+            void copy_to_vector(std::vector<int> * paired_pts, std::vector<int> * to_paired_pts){
+                for(auto it : _paired_map){
+                    paired_pts->push_back(it.first);
+                    to_paired_pts->push_back(it.second.first);
+                }
             }
 
         private:
@@ -106,7 +121,6 @@ namespace NNSearch {
                 if (root->isLeaf) {
                     // process leaf
                     for (int idx: root->points_idx) {
-                        if(_rm_set.count(idx) != 0)continue;
                         double dist = (_points.row(idx) - point.transpose()).norm();
                         result_set.addOnePoint(idx, dist);
                     }
@@ -177,7 +191,7 @@ namespace NNSearch {
             Eigen::MatrixXd _points;
             KDNode::Ptr _root;
             int _leaf_size;
-            std::set<int> _rm_set;
+            std::map<int, std::pair<int, double>> _paired_map;
     };
 }
 #endif
