@@ -1103,8 +1103,8 @@ float * GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
     // for debug
 //    Eigen::MatrixXf vertex;
 //    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
-
-//    std::ofstream fout("matrixTest", std::ios::app);
+//
+//    std::ofstream fout(fname, std::ios::trunc);
 //    fout << vertex << std::endl;
 //    fout.flush();
 
@@ -1292,7 +1292,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     // Position y -> y-axis
     // Position z -> depth
     // Position w -> confidence
-    // Color x -> color (encoded)
+    // Color x -> color & semantics (encoded)
     // Color y -> marks as the ID of model surfel to be updated
     // Color z -> old time
     // Color w -> time / tick
@@ -1307,27 +1307,32 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     float * LSM = this->getVertexDataFromBuffer(LSModel, LSMcount);
     Eigen::MatrixXd GSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(GSMView, ViewCount, 12).cast<double>();
     Eigen::MatrixXd LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12).cast<double>();
-    const int leaf_size = 5;
+    const int leaf_size = 10;
 
     Eigen::MatrixXd GSMvertexData = GSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
     Eigen::MatrixXd LSMvertexData = LSMvertex(Eigen::placeholders::all, Eigen::seqN(0,3));
     Eigen::MatrixXd LSMvertexDataAfterTrans = LSMvertexData;
 
     typedef nanoflann::KDTreeEigenMatrixAdaptor<Eigen::MatrixXd, 3, nanoflann::metric_L1> KDTree;
-    KDTree * kdtree = new KDTree(3, GSMvertexData, 10);
+    KDTree * kdtree = new KDTree(3, GSMvertexData, leaf_size);
 
     int iter_max = 30;
     float err_max = 0.5;
     std::map<int, std::pair<int, double>> paired_map;
     std::vector<int> paired_points_GSM;
     std::vector<int> paired_points_LSM;
-    std::vector<int> unstabled_points;
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(3, 3);
     Eigen::VectorXd T(3);
     T << 0, 0, 0;
 
     for(int iter = 0; iter < iter_max; iter++) {
+
+        // first, clear all the paired points
+        paired_points_LSM.clear();
+        paired_points_GSM.clear();
+        paired_map.clear();
+
 //        assert(R.rows() == LSMvertexData.transpose().rows() && R.cols() == LSMvertexData.transpose().cols());
         LSMvertexDataAfterTrans = ((R * LSMvertexDataAfterTrans.transpose()).colwise() + T) .transpose();
         Eigen::MatrixXd LSMvertexData_ = LSMvertexDataAfterTrans;
@@ -1375,7 +1380,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
             paired_points_LSM.push_back(copyback.second.first);
         }
 
-        std::cout << "paired points=" << paired_points_LSM.size() << std::endl;
+//        std::cout << "paired points=" << paired_points_LSM.size() << std::endl;
 
         Eigen::MatrixXd GSMvertexData_ = GSMvertexData(paired_points_GSM, Eigen::placeholders::all);
         LSMvertexData_ = LSMvertexData_(paired_points_LSM, Eigen::placeholders::all);
@@ -1408,29 +1413,95 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         Eigen::MatrixXd err = (R_ * LSMvertexData_.transpose()).colwise() + T_ - GSMvertexData_.transpose();
         float errf = (err.cwiseProduct(err)).sum() / paired_points_LSM.size();
 
-        // clear all the paired points
-        paired_points_LSM.clear();
-        paired_points_GSM.clear();
-        unstabled_points.clear();
-        paired_map.clear();
-
         R = R_;
         T = T_;
-        std::cout << "R=" << R << std::endl;
-        std::cout << "T=" << T << std::endl;
+//        std::cout << "R=" << R << std::endl;
+//        std::cout << "T=" << T << std::endl;
 
-        std::cout << "avg_error=" << errf << std::endl;
+        std::cout << iter << " paired points=" << paired_points_LSM.size() << " avg_error=" << errf << std::endl;
 
-        // output into the file
-        std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
-        fout << GSMvertexData_ << std::endl;
-        fout.flush();
-        fout.close();
-
-        std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
-        fout_LSM << LSMvertexData_ << std::endl;
-        fout_LSM.flush();
-        fout_LSM.close();
+        // output into the file, for debug only
+//        std::ofstream fout("output/GSM_" + std::to_string(iter), std::ios::trunc);
+//        fout << GSMvertex << std::endl;
+//        fout.flush();
+//        fout.close();
+//
+//        std::ofstream fout_LSM("output/LSM_" + std::to_string(iter), std::ios::trunc);
+//        fout_LSM << LSMvertex << std::endl;
+//        fout_LSM.flush();
+//        fout_LSM.close();
     }
     TOCK("Data::ICP");
+
+    TICK("Data::Fusion");
+    // flush back to LSM Vertex Data
+    LSMvertexDataAfterTrans = ((R * LSMvertexDataAfterTrans.transpose()).colwise() + T) .transpose();
+    LSMvertex.leftCols(3) = LSMvertexDataAfterTrans;
+    // TODO : change it into Matrix operation
+    std::vector<std::pair<int, int>> filtered_paired_pts;
+    // check the paired pts' texture / semantics data
+    for(int i = 0; i < paired_points_LSM.size(); i++){
+        int LSM_idx = paired_points_LSM.at(i);
+        int GSM_idx = paired_points_GSM.at(i);
+
+        // fatch out the 5th param => color & semantics (encoded)
+        float LSM_color = LSMvertex(LSM_idx, 4);
+        float GSM_color = GSMvertex(GSM_idx, 4);
+        uint LSM_sem_color = *(uint *)&LSM_color;
+        uint GSM_sem_color = *(uint *)&GSM_color;
+        // decode it into semantics
+        uint LSM_sem = (LSM_sem_color >> 24) & 0xFFu;
+        uint GSM_sem = (GSM_sem_color >> 24) & 0xFFu;
+        // decode it into texture
+        uint LSM_r = (LSM_sem_color >> 16) & 0xFFu;
+        uint LSM_g = (LSM_sem_color >> 8) & 0xFFu;
+        uint LSM_b = LSM_sem_color & 0xFFu;
+        uint GSM_r = (GSM_sem_color >> 16) & 0xFFu;
+        uint GSM_g = (GSM_sem_color >> 8) & 0xFFu;
+        uint GSM_b = GSM_sem_color & 0xFFu;
+        // fusion
+        double deltaE = RGB_color_Lab_difference_CIE94(LSM_r, LSM_g, LSM_b, GSM_r, GSM_g, GSM_b);
+        // if is the same semantics & texture diff < 20, then fuse two surfel
+        if(LSM_sem == GSM_sem && deltaE < 15){
+            auto LSM_row = LSMvertex.row(LSM_idx);
+            auto GSM_row = GSMvertex.row(GSM_idx);
+            // calc the distance
+            double dist = sqrt((GSM_row.head(3) - LSM_row.head(3)).array().square().sum());
+            // for debug
+//            std::cout << "Before : " << std::endl << GSM_row << std::endl << LSM_row << std::endl;
+            // update position
+            GSM_row.head(3) = (GSM_row.head(3) + LSM_row.head(3)) / 2;
+            // update color
+            uint Fusion_r = (LSM_r + GSM_r) / 2;
+            uint Fusion_g = (LSM_g + GSM_g) / 2;
+            uint Fusion_b = (LSM_b + GSM_b) / 2;
+            // encode into float
+            uint srgb = GSM_sem;
+            srgb = (srgb << 8) + Fusion_r;
+            srgb = (srgb << 8) + Fusion_g;
+            srgb = (srgb << 8) + Fusion_b;
+            GSMvertex(GSM_idx, 4) = *(float *)&srgb;
+            // update time & let the pose be the newest
+            GSM_row.segment(6, 5) = LSM_row.segment(6, 5);
+            // update radius to max_radius + distance(between Surfels)
+            GSMvertex(GSM_idx, 11) = dist / 2 + std::max(LSMvertex(LSM_idx, 11), GSMvertex(GSM_idx, 11));
+            // put the paired point into a new vector
+            filtered_paired_pts.emplace_back(LSM_idx, GSM_idx);
+            // set LSM vertex to invalid
+            LSMvertex(LSM_idx, 5) = -10.0f;
+            // for debug
+//            std::cout << "After : " << std::endl << GSM_row << std::endl << LSM_row << std::endl;
+        }else {
+            // set GSM vertex to invalid (make it to real time, more reliable)
+            GSMvertex(GSM_idx, 5) = -10.0f;
+        }
+    }
+    // Putting the LSM vertex into GSM
+    int fused_size = LSMvertex.rows() + GSMvertex.rows();
+    Eigen::MatrixXd FusedMatrix;
+    FusedMatrix.resize(fused_size, 12);
+    FusedMatrix << LSMvertex,
+                    GSMvertex;
+    std::cout << "After Fused=" << fused_size << " Paired=" << paired_points_LSM.size() << std::endl;
+    TOCK("Data::Fusion");
 }

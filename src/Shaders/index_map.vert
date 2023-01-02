@@ -23,7 +23,7 @@ layout (location = 1) in vec4 vColorTime;
 layout (location = 2) in vec4 vNormRad;
 
 out vec4 vPosition0;
-out vec4 vColorTime0;
+flat out vec4 vColorTime0;
 out vec4 vNormRad0;
 flat out int vertexId;
 

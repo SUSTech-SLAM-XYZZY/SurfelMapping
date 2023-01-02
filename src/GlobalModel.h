@@ -10,6 +10,7 @@
 #include "IndexMap.h"
 #include "Utils/Stopwatch.h"
 #include "Utils/nanoflann.hpp"
+#include "Utils/ColorCMP.h"
 #include <numeric>
 #include <pangolin/gl/gl.h>
 #include <Eigen/LU>

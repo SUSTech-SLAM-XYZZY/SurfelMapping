@@ -38,7 +38,6 @@ void main() {
         vPosition.w = vertConf.w;
 
         vColor = colorTime;
-        vColor.y = intBitsToFloat(currentID);
 
         vNormRad.xyz = mat3(pose) * normRadLocal_o.xyz;
         vNormRad.xyz = normalize(vNormRad.xyz);
