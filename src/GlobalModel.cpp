@@ -9,6 +9,7 @@ GlobalModel::GlobalModel()
    count(0),
    offset(0),
    dataCount(0),
+   rawdataCount(0),
    conflictCount(0),
    unstableCount(0),
    initProgram(loadProgramFromFile("init_unstable.vert")),
@@ -16,6 +17,7 @@ GlobalModel::GlobalModel()
    dataProgram(loadProgramGeomFromFile("data.vert", "data.geom")),
    genLSMProgram(loadProgramGeomFromFile("genLSM.vert", "genLSM.geom")),
    getGSMViewProgram(loadProgramGeomFromFile("gsmView.vert", "gsmView.geom")),
+   getValidPtsProgram(loadProgramGeomFromFile("filter_unused_pts.vert", "filter_unused_pts.geom")),
    conflictProgram(loadProgramGeomFromFile("conflict.vert", "conflict.geom")),
    fuseProgram(loadProgramFromFile("fuse.vert", "fuse.frag")),
    updateConflictProgram(loadProgramFromFile("update_conf.vert", "update_conf.frag")),
@@ -40,6 +42,12 @@ GlobalModel::GlobalModel()
     glGenTransformFeedbacks(1, &dataFid);
     glGenBuffers(1, &dataVbo);
     glBindBuffer(GL_ARRAY_BUFFER, dataVbo);
+    glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenTransformFeedbacks(1, &rawdataFid);
+    glGenBuffers(1, &rawdataVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, rawdataVbo);
     glBufferData(GL_ARRAY_BUFFER, Config::numPixels() * Config::vertexSize(), nullptr, GL_DYNAMIC_COPY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -157,6 +165,16 @@ GlobalModel::GlobalModel()
     glTransformFeedbackVaryingsNV(getGSMViewProgram->programId(), 3, gsmViewModule, GL_INTERLEAVED_ATTRIBS);
     getGSMViewProgram->Unbind();
 
+    getValidPtsProgram->Bind();
+    int validpts[3] =
+            {
+                    glGetVaryingLocationNV(getValidPtsProgram->programId(), "vPosition0"),
+                    glGetVaryingLocationNV(getValidPtsProgram->programId(), "vColorTime0"),
+                    glGetVaryingLocationNV(getValidPtsProgram->programId(), "vNormRad0"),
+            };
+    glTransformFeedbackVaryingsNV(getValidPtsProgram->programId(), 3, validpts, GL_INTERLEAVED_ATTRIBS);
+    getValidPtsProgram->Unbind();
+
     conflictProgram->Bind();
     int conflictUpdate[2] =
             {
@@ -199,6 +217,9 @@ GlobalModel::~GlobalModel()
 
     glDeleteTransformFeedbacks(1, &dataFid);
     glDeleteBuffers(1, &dataVbo);
+
+    glDeleteTransformFeedbacks(1, &rawdataFid);
+    glDeleteBuffers(1, &rawdataVbo);
 
     glDeleteTransformFeedbacks(1, &lsmFid);
     glDeleteBuffers(1, &lsmVbo);
@@ -604,7 +625,7 @@ void GlobalModel::backMapping()
 void GlobalModel::concatenate()
 {
     TICK("Concatenate");
-
+    // fliter out new unstable surfels
     unstableProgram->Bind();
 
     glEnable(GL_RASTERIZER_DISCARD);
@@ -643,7 +664,7 @@ void GlobalModel::concatenate()
     glFinish();
 
     //-----------------------------------------------------
-
+    // concatenate new unstable surfel to modelVbo
     glBindBuffer(GL_COPY_READ_BUFFER, unstableVbo);
     glBindBuffer(GL_COPY_WRITE_BUFFER, modelVbo);
 
@@ -904,6 +925,11 @@ std::pair<GLuint, GLuint> GlobalModel::getData()
     return {dataVbo, dataCount};
 }
 
+std::pair<GLuint, GLuint> GlobalModel::getRawData()
+{
+    return {rawdataVbo, rawdataCount};
+}
+
 std::pair<GLuint, GLuint> GlobalModel::getConflict()
 {
     return {conflictVbo, conflictCount};
@@ -1104,7 +1130,7 @@ float * GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
 //    Eigen::MatrixXf vertex;
 //    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
 //
-//    std::ofstream fout(fname, std::ios::trunc);
+//    std::ofstream fout("test", std::ios::trunc);
 //    fout << vertex << std::endl;
 //    fout.flush();
 
@@ -1301,7 +1327,14 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     // NormRad z -> depth/z-axis
     // NormRad w -> radius
     TICK("Data::ICP");
-    if(ViewCount == 0 || LSMcount == 0)return;
+    if(ViewCount == 0 && LSMcount == 0)return;
+    if(ViewCount == 0 && LSMcount != 0){
+        glBindBuffer(GL_ARRAY_BUFFER, rawdataVbo);
+        glBufferData(GL_ARRAY_BUFFER, LSMcount * Config::vertexSize(), this->getVertexDataFromBuffer(LSModel, LSMcount), GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        rawdataCount = LSMcount;
+        return;
+    }
 
     float * GSMView = this->getVertexDataFromBuffer(GlobalSurfelInView, ViewCount);
     float * LSM = this->getVertexDataFromBuffer(LSModel, LSMcount);
@@ -1462,7 +1495,7 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
         // fusion
         double deltaE = RGB_color_Lab_difference_CIE94(LSM_r, LSM_g, LSM_b, GSM_r, GSM_g, GSM_b);
         // if is the same semantics & texture diff < 20, then fuse two surfel
-        if(LSM_sem == GSM_sem && deltaE < 15){
+        if(LSM_sem == GSM_sem && deltaE < 10){
             auto LSM_row = LSMvertex.row(LSM_idx);
             auto GSM_row = GSMvertex.row(GSM_idx);
             // calc the distance
@@ -1482,9 +1515,9 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
             srgb = (srgb << 8) + Fusion_b;
             GSMvertex(GSM_idx, 4) = *(float *)&srgb;
             // update time & let the pose be the newest
-            GSM_row.segment(6, 5) = LSM_row.segment(6, 5);
-            // update radius to max_radius + distance(between Surfels)
-            GSMvertex(GSM_idx, 11) = dist / 2 + std::max(LSMvertex(LSM_idx, 11), GSMvertex(GSM_idx, 11));
+            GSM_row.segment(7, 4) = LSM_row.segment(7, 4);
+            // update radius to sum(radius) / 2
+            GSMvertex(GSM_idx, 11) = (LSMvertex(LSM_idx, 11) + GSMvertex(GSM_idx, 11))/2;
             // put the paired point into a new vector
             filtered_paired_pts.emplace_back(LSM_idx, GSM_idx);
             // set LSM vertex to invalid
@@ -1498,10 +1531,64 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     }
     // Putting the LSM vertex into GSM
     int fused_size = LSMvertex.rows() + GSMvertex.rows();
-    Eigen::MatrixXd FusedMatrix;
-    FusedMatrix.resize(fused_size, 12);
-    FusedMatrix << LSMvertex,
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> FusedMatrix_tmp;
+    FusedMatrix_tmp.resize(fused_size, 12);
+    FusedMatrix_tmp << LSMvertex,
                     GSMvertex;
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> FusedMatrix = FusedMatrix_tmp.cast<float>();
     std::cout << "After Fused=" << fused_size << " Paired=" << paired_points_LSM.size() << std::endl;
     TOCK("Data::Fusion");
+
+    // transform it to dataVbo
+    glBindBuffer(GL_ARRAY_BUFFER, rawdataVbo);
+    glBufferData(GL_ARRAY_BUFFER, fused_size * Config::vertexSize(), FusedMatrix.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    rawdataCount = fused_size;
+}
+
+void GlobalModel::getValidPts()
+{
+    TICK("FilterOutUnusedPts");
+    // fliter out new unstable surfels
+    getValidPtsProgram->Bind();
+
+    glEnable(GL_RASTERIZER_DISCARD);
+
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, dataVbo);
+
+    glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, countQuery);
+    dataCount = 0;
+
+    glBeginTransformFeedback(GL_POINTS);
+
+    glBindBuffer(GL_ARRAY_BUFFER, rawdataVbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), 0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 2));
+
+    glDrawArrays(GL_POINTS, 0, rawdataCount);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glEndTransformFeedback();
+
+    glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &dataCount);
+
+    glDisable(GL_RASTERIZER_DISCARD);
+
+    getValidPtsProgram->Unbind();
+
+    glFinish();
+
+    TOCK("FilterOutUnusedPts");
+
+    CheckGlDieOnError();
+
 }

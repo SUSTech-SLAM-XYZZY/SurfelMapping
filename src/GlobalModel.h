@@ -100,6 +100,8 @@ public:
 
     std::pair<GLuint, GLuint> getData();
 
+    std::pair<GLuint, GLuint> getRawData();
+
     std::pair<GLuint, GLuint> getConflict();
 
     std::pair<GLuint, GLuint> getUnstable();
@@ -132,10 +134,14 @@ public:
 
     void ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, int LSMcount);
 
+    void getValidPts();
+
 private:
     GLuint modelVbo, modelFid;;                    // whole surfel buffer & its feedback ID
     // standby bits holds the ID
     GLuint dataVbo, dataFid;                       // including updated surfel and new unstable surfel
+
+    GLuint rawdataVbo, rawdataFid;                 // including updated surfel, new unstable surfel and unused pts
 
     GLuint lsmVbo, lsmFid;                          // including new unstable surfel
 
@@ -153,6 +159,7 @@ private:
     unsigned int gsmViewcount;
     unsigned int offset;
     unsigned int dataCount;
+    unsigned int rawdataCount;
     unsigned int conflictCount;
     unsigned int unstableCount;
 
@@ -161,6 +168,7 @@ private:
     std::shared_ptr<Shader> dataProgram;            // data association
     std::shared_ptr<Shader> genLSMProgram;          // generate LSM Model
     std::shared_ptr<Shader> getGSMViewProgram;      // get the view from GSM Model
+    std::shared_ptr<Shader> getValidPtsProgram;      // fliter out the unused pts
     std::shared_ptr<Shader> conflictProgram;        // check conflict
     std::shared_ptr<Shader> fuseProgram;            // update fused model
     std::shared_ptr<Shader> updateConflictProgram; // update conflict model

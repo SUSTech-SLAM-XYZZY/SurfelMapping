@@ -217,18 +217,23 @@ void SurfelMapping::processFrame(const unsigned char *rgb,
 
         globalModel.ICP(globalModel.getGSMView().first, globalModel.getGSMView().second, globalModel.getLocalModel().first, globalModel.getLocalModel().second);
 
+        globalModel.getValidPts();
 
-        globalModel.dataAssociate(currPose,
-                                  tick,
-                                  textures[GPUTexture::RGB],
-                                  textures[GPUTexture::DEPTH_METRIC],
-                                  textures[GPUTexture::SEMANTIC],
-                                  indexMap.indexTex(),
-                                  indexMap.vertConfTex(),
-                                  indexMap.colorTimeTex(),
-                                  indexMap.normalRadTex(),
-                                  nearClipDepth,
-                                  farClipDepth);
+//        globalModel.getVertexDataFromBuffer(globalModel.getData().first, globalModel.getData().second);
+
+//        globalModel.dataAssociate(currPose,
+//                                  tick,
+//                                  textures[GPUTexture::RGB],
+//                                  textures[GPUTexture::DEPTH_METRIC],
+//                                  textures[GPUTexture::SEMANTIC],
+//                                  indexMap.indexTex(),
+//                                  indexMap.vertConfTex(),
+//                                  indexMap.colorTimeTex(),
+//                                  indexMap.normalRadTex(),
+//                                  nearClipDepth,
+//                                  farClipDepth);
+
+//        globalModel.getVertexDataFromBuffer(globalModel.getData().first, globalModel.getData().second);
 
 //        std::cout << "Data Association Num: " << globalModel.getData().second << '\n';
 
