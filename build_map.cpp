@@ -11,7 +11,6 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
-#include <iomanip>
 #include <vector>
 #include <set>
 #include <ctime>
@@ -21,53 +20,7 @@ using namespace std;
 
 int globalId = 0;
 int lastRestartId = 0;
-KittiReader* reader_ptr;
 
-bool isFileExists_fopen(string name) {
-    if (FILE *file = fopen(name.c_str(), "r")) {
-        fclose(file);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-void getRGBImgLoss(){
-    std::string data_path = "../output/paired/image/";
-    int frame_id = 0;
-    // find out the start frame_id
-    while(true){
-        std::stringstream ss;
-        ss << std::setfill('0') << std::setw(6) << frame_id;
-        std::string file_name = ss.str() + ".png";
-        if(isFileExists_fopen(data_path + file_name)){
-            break;
-        }else{
-            frame_id++;
-            continue;
-        }
-    }
-    // calc the loss
-    while(true){
-        std::stringstream ss;
-        ss << std::setfill('0') << std::setw(6) << frame_id;
-        std::string file_name = ss.str() + ".png";
-        if(isFileExists_fopen(data_path + file_name)){
-            std::string RGB_file = reader_ptr->loadRGBFrameFileName(frame_id);
-
-            cv::Mat rgb = cv::imread(data_path + file_name, cv::IMREAD_COLOR);
-            cv::Mat rgb_paired = cv::imread(RGB_file, cv::IMREAD_COLOR);
-
-            std::cout << "Frame " << frame_id << std::endl;
-            std::cout << "PSNR = " << getPSNR(rgb, rgb_paired) << std::endl;
-            std::cout << "SSIM = " << getMSSIM(rgb, rgb_paired) << std::endl;
-            frame_id++;
-            continue;
-        }else{
-            break;
-        }
-    }
-}
 
 void rungui(SurfelMapping & core, GUI & gui)
 {
@@ -206,8 +159,6 @@ void rungui(SurfelMapping & core, GUI & gui)
                                                          Config::cx(), Config::cy(),
                                                          lastRestartId);
 
-                    getRGBImgLoss();
-
                     printf("|==== %d frames are saved. ====|\n", views.size());
                     usleep(50000);
                 }
@@ -325,11 +276,7 @@ int main(int argc, char ** argv)
 {
     std::string kittiDir(argv[1]);
 
-    reader_ptr = new KittiReader(kittiDir, false, true, 0, true);
-
-    KittiReader reader = *reader_ptr;
-
-//    KittiReader reader(kittiDir, false, true, 0, true);
+    KittiReader reader(kittiDir, false, true, 0, true);
 
     // Initialize the Config in first call with correct arguments
     Config::getInstance(reader.fx(), reader.fy(), reader.cx(), reader.cy(), reader.H(), reader.W());

@@ -382,6 +382,20 @@ void SurfelMapping::computeFeedbackBuffers()
     TOCK("feedbackBuffers");
 }
 
+static void getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
+    std::string rgb_path = "/home/bill/prog/Surfel/dataset/image_2/";
+    // calc the loss
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << frame_id;
+    std::string file_name = ss.str() + ".png";
+
+    cv::Mat rgb = cv::imread(rgb_path + file_name, cv::IMREAD_COLOR);
+
+    std::cout << "Frame " << frame_id << std::endl;
+    std::cout << "PSNR = " << getPSNR(paired_Img, rgb) << std::endl;
+    std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
+}
+
 void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Matrix4f> &views,
                                   int w, int h, float fx, float fy, float cx, float cy, int startId)
 {
@@ -432,6 +446,8 @@ void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Mat
 
         if(!(res1 && res2))
             printf("%s is NOT saved!\n", file_name.c_str());
+
+        getRGBImgLoss(image, startId);
 
         //usleep(1000);
 
