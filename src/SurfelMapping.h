@@ -13,6 +13,7 @@
 #include "FeedbackBuffer.h"
 #include "ComputePack.h"
 #include "Checker.h"
+#include "Error.h"
 
 
 class SurfelMapping

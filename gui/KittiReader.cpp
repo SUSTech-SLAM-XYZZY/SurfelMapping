@@ -304,6 +304,14 @@ bool KittiReader::loadGroundTruth()
     return true;
 }
 
+std::string KittiReader::loadRGBFrameFileName(int frameid){
+    // rgb images
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << frameid;
+    std::string rgb_file = rgbDir + "/" + ss.str() + ".png";
+    return rgb_file;
+}
+
 std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > * KittiReader::getGroundTruth()
 {
     return groundTruth;

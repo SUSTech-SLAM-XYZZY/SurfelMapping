@@ -30,6 +30,7 @@ public:
 
     bool loadGroundTruth() final;
 
+    std::string loadRGBFrameFileName(int frameid);
 
     Eigen::Matrix4f gtPose;
 
