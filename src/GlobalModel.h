@@ -87,6 +87,8 @@ public:
 
     void setImageSize(int w, int h, float fx, float fy, float cx, float cy);
 
+    void rsmTuning(const Eigen::Matrix4f &view);
+
     void renderImage(const Eigen::Matrix4f &view);
 
     std::pair<GLuint, GLuint> getModel();

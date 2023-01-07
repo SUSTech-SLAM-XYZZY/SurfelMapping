@@ -404,6 +404,8 @@ void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Mat
         ss << std::setfill('0') << std::setw(6) << startId;
         std::string file_name = ss.str() + ".png";
 
+        globalModel.rsmTuning(v);
+
         globalModel.renderImage(v);
 
         //---------------------------------------------

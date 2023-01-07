@@ -806,6 +806,13 @@ void GlobalModel::setImageSize(int w, int h, float fx, float fy, float cx, float
     imageCam << cx, cy, fx, fy;
 }
 
+
+void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
+    pangolin::GlFramebuffer imageFramebuffer;
+    // load imageTexture  semanticTexture  depthTexture  imageRenderBuffer
+
+}
+
 void GlobalModel::renderImage(const Eigen::Matrix4f &view)
 {
     pangolin::GlFramebuffer imageFramebuffer;
@@ -1307,3 +1314,4 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     Eigen::MatrixXf LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12);
     
 }
+
