@@ -21,6 +21,27 @@ uniform int isClean;
 out int conf_id;
 out vec4 conf_posConf;
 
+bool checkNeighbours(vec2 texCoord, sampler2D depth)
+{
+
+    float z = float(textureLod(depth, vec2(texCoord.x - (1.0 / cols), texCoord.y), 0.0));
+    if(z == 0)
+    return false;
+
+    z = float(textureLod(depth, vec2(texCoord.x, texCoord.y - (1.0 / rows)), 0.0));
+    if(z == 0)
+    return false;
+
+    z = float(textureLod(depth, vec2(texCoord.x + (1.0 / cols), texCoord.y), 0.0));
+    if(z == 0)
+    return false;
+
+    z = float(textureLod(depth, vec2(texCoord.x, texCoord.y + (1.0 / rows)), 0.0));
+    if(z == 0)
+    return false;
+
+    return true;
+}
 
 void main()
 {
@@ -32,7 +53,9 @@ void main()
     float u = cam.z * xl + cam.x;
     float v = cam.w * yl + cam.y;
 
-    if(u < stereoBorder || u > cols || v < 0 || v > rows || vPosHome.z <= minDepth || vPosHome.z >= maxDepth)
+    float boundary_fuseThresh = 7;
+
+    if(u < stereoBorder || u > cols || v < 0 || v > rows || vPosHome.z <= minDepth || vPosHome.z >= maxDepth || abs(u - cols) < boundary_fuseThresh || abs(v - rows) < boundary_fuseThresh)
     {
         conf_id = -10;
         conf_posConf = vec4(0);
@@ -61,7 +84,7 @@ void main()
         float x = 0;
         float y = 0;
 
-        if(depth * lambda - vPosHome.z * lambda > fuseThresh * vPosHome.z)  // closer than the mewest measurement
+        if(depth * lambda - vPosHome.z * lambda > fuseThresh * vPosHome.z && checkNeighbours(texcoord.xy, drSampler))  // closer than the mewest measurement
         {
             // x, y is NDC coordinate
             x = (u - (cols * 0.5)) / (cols * 0.5);
@@ -79,5 +102,4 @@ void main()
             conf_posConf = vec4(0);
         }
     }
-
 }
