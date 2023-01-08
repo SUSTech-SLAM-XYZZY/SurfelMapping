@@ -1391,6 +1391,30 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
             const size_t nMatches = kdtree->index_->radiusSearch(&point[0], r, radius_result, params);
 
             for(int j = 0; j < nMatches; j++){
+
+                int LSM_idx = i;
+                int GSM_idx = (int)radius_result[j].first;
+
+                // fatch out the 5th param => color & semantics (encoded)
+                float LSM_color = LSMvertex(LSM_idx, 4);
+                float GSM_color = GSMvertex(GSM_idx, 4);
+                uint LSM_sem_color = *(uint *)&LSM_color;
+                uint GSM_sem_color = *(uint *)&GSM_color;
+                // decode it into semantics
+                uint LSM_sem = (LSM_sem_color >> 24) & 0xFFu;
+                uint GSM_sem = (GSM_sem_color >> 24) & 0xFFu;
+                // decode it into texture
+                uint LSM_r = (LSM_sem_color >> 16) & 0xFFu;
+                uint LSM_g = (LSM_sem_color >> 8) & 0xFFu;
+                uint LSM_b = LSM_sem_color & 0xFFu;
+                uint GSM_r = (GSM_sem_color >> 16) & 0xFFu;
+                uint GSM_g = (GSM_sem_color >> 8) & 0xFFu;
+                uint GSM_b = GSM_sem_color & 0xFFu;
+                // check fusion
+                double deltaE = RGB_color_Lab_difference_CIE94(LSM_r, LSM_g, LSM_b, GSM_r, GSM_g, GSM_b);
+                if(LSM_sem != GSM_sem || deltaE > 10)
+                    continue;
+
                 if(paired_map.count((int)radius_result[j].first) != 1){
                     paired_map.insert(std::make_pair((int)radius_result[j].first, std::make_pair(i, radius_result[j].second)));
                     break;
