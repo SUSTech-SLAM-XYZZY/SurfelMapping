@@ -4,10 +4,85 @@
 
 #include "RSM.h"
 #include <iostream>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
+void rotateNormal(const Eigen::Vector4f& position,
+                  const Eigen::Vector4f& normal,
+                  Eigen::Vector4f& new_normal,
+                  const Eigen::Matrix4f& view,
+                  float yaw,
+                  float pitch) {
+    const Eigen::Matrix4f t_inv_4f = view.inverse();
+    const Eigen::Matrix3f t_inv = t_inv_4f.topLeftCorner<3, 3>();
+    const Eigen::Vector3f position_3f = position.head<3>();
+    const Eigen::Vector3f normal_3f = normal.head<3>();
+
+    // center points normal vector
+    Eigen::Vector3f vPosHome = t_inv * position_3f;
+    vPosHome.normalize();
+    // surfel normal vector
+    Eigen::Vector3f vNormRad = t_inv * normal_3f;
+    vNormRad.normalize();
+
+    // get eye coordinates
+    Eigen::Vector3f up = Eigen::Vector3f::UnitY();
+    Eigen::Vector3f z = -vPosHome;
+    Eigen::Vector3f x = up.cross(z);
+    x.normalize();
+    Eigen::Vector3f y = z.cross(x);
+    z.normalize();
+
+    // rotate normal
+    Eigen::Matrix3f rot;
+    rot = Eigen::AngleAxisf(yaw * M_PI, y)
+            * Eigen::AngleAxisf(pitch * M_PI, x);
+    Eigen::Vector3f new_vNormRad = rot * vNormRad;
+
+    Eigen::Vector3f new_normal_3f = t_inv.inverse() * new_vNormRad;
+    new_normal.head<3>() = new_normal_3f;
+    new_normal(3) = normal(3);
+
+    // reference https://zhuanlan.zhihu.com/p/66384929
+
+    /*
+    // get center look at matrix
+    Eigen::Matrix3f look_at = Eigen::Matrix3f::Identity();
+    look_at(0, Eigen::seq(0, 2)) = x.transpose();
+    look_at(1, Eigen::seq(0, 2)) = y.transpose();
+    look_at(2, Eigen::seq(0, 2)) = z.transpose();
+
+    // get relative transform (normal -> look_at)
+    Eigen::Vector3f relative_normal = look_at * normal_3f;
+
+    // rotate normal
+    Eigen::Matrix3f mat;
+    mat = Eigen::AngleAxisf(yaw * M_PI, Eigen::Vector3f::UnitY())
+            * Eigen::AngleAxisf(pitch * M_PI, Eigen::Vector3f::UnitX());
+    new_normal.head<3>() = mat * relative_normal;
+
+    // make back to original space
+    new_normal.head<3>() =  * relative_normal;
+    */
+}
 
 int main() {
     using namespace std;
     using namespace Eigen;
+
+    Eigen::Vector4f position(1,1,1,1);
+    Eigen::Vector4f normal(0,1,0,0);
+    Eigen::Vector4f new_normal;
+    Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
+    float yaw = 2.0f;
+    float pitch = 0.0f;
+
+    rotateNormal(position, normal, new_normal, view, yaw, pitch);
+
+    cout << new_normal << endl;
+
+    cout << Eigen::AngleAxisf(M_PI, Eigen::Vector3f::UnitX())
+        * Eigen::Vector3f(0, 1, 0) << endl;
 
     /*
     MatrixXd A(5,2);
@@ -31,13 +106,15 @@ int main() {
     */
 
 
-    Eigen::Vector2f x_t = {0.5, 1};
-    Eigen::Vector2f y_t = {-0.5, -1};
-    RSM rsm(x_t, y_t);
-
-    Eigen::MatrixX4f step_df;
-    rsm.run(step_df);
-    cout << "step_df =\n" << step_df << endl;
+//    Eigen::Vector2f x_t = {0.5, 1};
+//    Eigen::Vector2f y_t = {-0.5, -1};
+//    RSM rsm;
+//    rsm.x_t = x_t;
+//    rsm.y_t = y_t;
+//
+//    Eigen::MatrixX4f step_df;
+//    rsm.run();
+//    cout << "step_df =\n" << step_df << endl;
 
 
 /*
@@ -69,4 +146,6 @@ int main() {
 //    A1(Eigen::all, Eigen::seq(4, 7)) = A2;
     cout << "A3:\n" << A1 << endl;
      */
+
+
 }

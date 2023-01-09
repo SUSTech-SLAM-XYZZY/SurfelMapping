@@ -857,6 +857,43 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
     rsm.run();
 }
 
+void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
+                               const Eigen::Vector4f& normal,
+                               Eigen::Vector4f& new_normal,
+                               const Eigen::Matrix4f& view,
+                               float yaw,
+                               float pitch) {
+    const Eigen::Matrix4f t_inv_4f = view.inverse();
+    const Eigen::Matrix3f t_inv = t_inv_4f.topLeftCorner<3, 3>();
+    const Eigen::Vector3f position_3f = position.head<3>();
+    const Eigen::Vector3f normal_3f = normal.head<3>();
+
+    // center points normal vector
+    Eigen::Vector3f vPosHome = t_inv * position_3f;
+    vPosHome.normalize();
+    // surfel normal vector
+    Eigen::Vector3f vNormRad = t_inv * normal_3f;
+    vNormRad.normalize();
+
+    // get eye coordinates
+    Eigen::Vector3f up = Eigen::Vector3f::UnitY();
+    Eigen::Vector3f z = -vPosHome;
+    Eigen::Vector3f x = up.cross(z);
+    x.normalize();
+    Eigen::Vector3f y = z.cross(x);
+    z.normalize();
+
+    // rotate normal
+    Eigen::Matrix3f rot;
+    rot = Eigen::AngleAxisf(yaw * M_PI, y)
+          * Eigen::AngleAxisf(pitch * M_PI, x);
+    Eigen::Vector3f new_vNormRad = rot * vNormRad;
+
+    Eigen::Vector3f new_normal_3f = t_inv.inverse() * new_vNormRad;
+    new_normal.head<3>() = new_normal_3f;
+    new_normal(3) = normal(3);
+}
+
 void GlobalModel::adptiveRenderToBuffer(const Eigen::Matrix4f &pose)
 {
     adaptiveRenderToBufferProgram->Bind();

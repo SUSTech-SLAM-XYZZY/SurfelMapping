@@ -92,6 +92,13 @@ public:
 
     void rsmTuning(const Eigen::Matrix4f &view);
 
+    void rotateNormal(const Eigen::Vector4f& position,
+                      const Eigen::Vector4f& normal,
+                      Eigen::Vector4f& new_normal,
+                      const Eigen::Matrix4f& view,
+                      float yaw,
+                      float pitch);
+
     void adptiveRenderToBuffer(const Eigen::Matrix4f &pose);
 
     void RenderingImageToTexture(const Eigen::Matrix4f &view);
