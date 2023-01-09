@@ -4,13 +4,6 @@
 #ifndef SURFELMAPPING_RSM_H
 #define SURFELMAPPING_RSM_H
 
-#include <iostream>
-#include <utility>
-#include <vector>
-#include <cmath>
-#include <iomanip>
-#include <eigen3/Eigen/QR>
-#include <eigen3/Eigen/SVD>
 #include <eigen3/Eigen/Core>
 
 /**

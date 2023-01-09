@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include "RSM.h"
 
 SurfelMapping::SurfelMapping()
 : tick(0),
@@ -394,6 +395,14 @@ static void getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
     std::cout << "Frame " << frame_id << std::endl;
     std::cout << "PSNR = " << getPSNR(paired_Img, rgb) << std::endl;
     std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
+}
+
+void test() {
+    Eigen::Vector2f x_t = {0.5, 1};
+    Eigen::Vector2f y_t = {-0.5, -1};
+    RSM rsm(x_t, y_t);
+    Eigen::MatrixX4f step_df;
+    rsm.run(step_df);
 }
 
 void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Matrix4f> &views,

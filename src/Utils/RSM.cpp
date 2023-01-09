@@ -4,6 +4,14 @@
 
 #include "RSM.h"
 #include "Error.h"
+#include <iostream>
+#include <utility>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+#include <eigen3/Eigen/QR>
+#include <eigen3/Eigen/SVD>
+
 
 void RSM::appendMat(Eigen::MatrixX4f& mat1, const Eigen::Matrix4f& mat2) {
     mat1.conservativeResize(mat1.rows() + mat2.rows(), mat1.cols());

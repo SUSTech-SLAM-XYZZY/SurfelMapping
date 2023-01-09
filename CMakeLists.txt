@@ -15,13 +15,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -O0 -std=c++11 -DSHADER_DIR=${S
 set(CMAKE_BUILD_TYPE Debug)
 
 
-set(BUILD_TEST 0)
+set(BUILD_TEST 1)
 
 
-find_package(Pangolin 0.1 REQUIRED)
+find_package(Pangolin 0.8 REQUIRED)
 #find_package(CUDA REQUIRED)
 #find_package(SuiteSparse REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 4 REQUIRED)
 
 
 # code for lib
@@ -77,7 +77,8 @@ target_link_libraries(load_map surmap_gui surfelmapping)
 
 
 if (BUILD_TEST)
-    add_executable(test test_main.cpp)
+#    add_executable(test test_main.cpp)
+    add_executable(test src/test/test_rsm.cpp)
 
     target_link_libraries(test surmap_gui surfelmapping)
 endif ()
