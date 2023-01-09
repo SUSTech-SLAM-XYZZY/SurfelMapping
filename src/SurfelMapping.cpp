@@ -397,13 +397,13 @@ static void getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
     std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
 }
 
-void test() {
-    Eigen::Vector2f x_t = {0.5, 1};
-    Eigen::Vector2f y_t = {-0.5, -1};
-    RSM rsm(x_t, y_t);
-    Eigen::MatrixX4f step_df;
-    rsm.run();
-}
+//void test() {
+//    Eigen::Vector2f x_t = {0.5, 1};
+//    Eigen::Vector2f y_t = {-0.5, -1};
+//    RSM rsm(x_t, y_t);
+//    Eigen::MatrixX4f step_df;
+//    rsm.run();
+//}
 
 void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Matrix4f> &views,
                                   int w, int h, float fx, float fy, float cx, float cy, int startId)
@@ -427,9 +427,11 @@ void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Mat
         ss << std::setfill('0') << std::setw(6) << startId;
         std::string file_name = ss.str() + ".png";
 
+        globalModel.adptiveRenderToBuffer(v);
+
         globalModel.rsmTuning(v);
 
-        globalModel.renderImage(v);
+//        globalModel.renderImage(v);
 
         //---------------------------------------------
 

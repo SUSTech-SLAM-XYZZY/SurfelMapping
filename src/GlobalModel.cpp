@@ -11,6 +11,7 @@ GlobalModel::GlobalModel()
    dataCount(0),
    conflictCount(0),
    unstableCount(0),
+   renderCount(0),
    initProgram(loadProgramFromFile("init_unstable.vert")),
    modelProgram(loadProgramFromFile("map.vert", "map.frag")),
    dataProgram(loadProgramGeomFromFile("data.vert", "data.geom")),
@@ -21,6 +22,7 @@ GlobalModel::GlobalModel()
    updateConflictProgram(loadProgramFromFile("update_conf.vert", "update_conf.frag")),
    backMappingProgram(loadProgramGeomFromFile("back_map.vert", "back_map.geom")),
    unstableProgram(loadProgramGeomFromFile("unstable.vert", "unstable.geom")),
+   adaptiveRenderToBufferProgram(loadProgramGeomFromFile("adaptive_rendering.vert", "adaptive_rendering.geom")),
    drawPointProgram(loadProgramFromFile("draw_feedback.vert", "draw_feedback.frag")),
    drawSurfelProgram(loadProgramFromFile("draw_surface.vert", "draw_surface_adaptive.geom", "draw_surface.frag")),
    drawImageProgram(loadProgramFromFile("draw_image.vert", "draw_image_adaptive.geom", "draw_image.frag")),
@@ -34,6 +36,12 @@ GlobalModel::GlobalModel()
     glGenTransformFeedbacks(1, &modelFid);
     glGenBuffers(1, &modelVbo);
     glBindBuffer(GL_ARRAY_BUFFER, modelVbo);
+    glBufferData(GL_ARRAY_BUFFER, bufferSize, nullptr, GL_DYNAMIC_COPY);  // only allocate space
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenTransformFeedbacks(1, &renderFid);
+    glGenBuffers(1, &renderVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
     glBufferData(GL_ARRAY_BUFFER, bufferSize, nullptr, GL_DYNAMIC_COPY);  // only allocate space
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -186,6 +194,16 @@ GlobalModel::GlobalModel()
     glTransformFeedbackVaryingsNV(unstableProgram->programId(), 3, unstableUpdate, GL_INTERLEAVED_ATTRIBS);
     unstableProgram->Unbind();
 
+    adaptiveRenderToBufferProgram->Bind();
+    int adaptiveRendering[3] =
+            {
+                    glGetVaryingLocationNV(dataProgram->programId(), "vPosition0"),
+                    glGetVaryingLocationNV(dataProgram->programId(), "vColor0"),
+                    glGetVaryingLocationNV(dataProgram->programId(), "vNormRad0")
+            };
+    glTransformFeedbackVaryingsNV(adaptiveRenderToBufferProgram->programId(), 3, adaptiveRendering, GL_INTERLEAVED_ATTRIBS);
+    adaptiveRenderToBufferProgram->Unbind();
+
 
     glGenQueries(1, &countQuery);
 
@@ -205,6 +223,9 @@ GlobalModel::~GlobalModel()
 
     glDeleteTransformFeedbacks(1, &gsmViewFid);
     glDeleteBuffers(1, &gsmViewVbo);
+
+    glDeleteTransformFeedbacks(1, &renderFid);
+    glDeleteBuffers(1, &renderVbo);
 
     glDeleteQueries(1, &countQuery);
 
@@ -806,18 +827,86 @@ void GlobalModel::setImageSize(int w, int h, float fx, float fy, float cx, float
     imageCam << cx, cy, fx, fy;
 }
 
-
-void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
-    pangolin::GlFramebuffer imageFramebuffer;
+void GlobalModel::transformToRenderBuffer(){
+    std::pair<GLuint, GLuint> source = this->getModel();
+    renderCount = source.second;  // no use ?
     // load imageTexture  semanticTexture  depthTexture  imageRenderBuffer
-    glBindBuffer(GL_COPY_READ_BUFFER, modelVbo);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, modelVbo);
+    glBindBuffer(GL_COPY_READ_BUFFER, source.first);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, renderVbo);
 
-    glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, count * Config::vertexSize(), unstableCount * Config::vertexSize());
-
-    int rsmCount = count;
+    glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, source.second * Config::vertexSize());
 
     glFinish();
+
+    CheckGlDieOnError()
+}
+
+void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
+    Eigen::Vector2f x_t = {1, 1};
+    Eigen::Vector2f y_t = {0, 0};
+    RSM rsm;
+    rsm.x_t = x_t;
+    rsm.y_t = y_t;
+    rsm.max_iter = 10;
+    rsm.increment_y_l = 1;
+    rsm.increment_y_s = 1;
+    rsm.step_x = 0.005;
+    rsm.step_y = 0.005;
+    rsm.clear();
+    rsm.run();
+}
+
+void GlobalModel::adptiveRenderToBuffer(const Eigen::Matrix4f &pose)
+{
+    adaptiveRenderToBufferProgram->Bind();
+
+    Eigen::Matrix4f t_inv = pose.inverse();
+    adaptiveRenderToBufferProgram->setUniform(Uniform("t_inv", t_inv));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("cam", imageCam));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("pose", pose));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("cols", (float)imageRenderBuffer.width));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("rows", (float)imageRenderBuffer.height));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("maxDepth", 200.f));
+    adaptiveRenderToBufferProgram->setUniform(Uniform("threshold", 0.f));
+
+    glBindBuffer(GL_ARRAY_BUFFER, modelVbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), 0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 1));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 2));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    // use GPU to accerlate the progress
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, renderFid);
+    //glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, dataVbo);
+    glTransformFeedbackBufferBase(renderFid, 0, renderVbo);
+
+    glBeginTransformFeedback(GL_POINTS);
+
+    glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, countQuery);
+    renderCount = 0;
+
+    glDrawArrays(GL_POINTS, 0, count);
+
+    glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+    glGetQueryObjectuiv(countQuery, GL_QUERY_RESULT, &renderCount);
+
+    glEndTransformFeedback();
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+
+    adaptiveRenderToBufferProgram->Unbind();
+
+    glFinish();
+
+    CheckGlDieOnError()
 }
 
 void GlobalModel::renderImage(const Eigen::Matrix4f &view)
@@ -901,6 +990,11 @@ pangolin::GlTexture * GlobalModel::getSemanticTex()
 std::pair<GLuint, GLuint> GlobalModel::getModel()
 {
     return {modelVbo, count};
+}
+
+std::pair<GLuint, GLuint> GlobalModel::getRenderBuffer()
+{
+    return {renderVbo, renderCount};
 }
 
 std::pair<GLuint, GLuint> GlobalModel::getLocalModel()

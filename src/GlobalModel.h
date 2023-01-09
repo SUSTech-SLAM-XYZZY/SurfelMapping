@@ -9,6 +9,7 @@
 #include "GPUTexture.h"
 #include "IndexMap.h"
 #include "Utils/Stopwatch.h"
+#include "Utils/RSM.h"
 #include <pangolin/gl/gl.h>
 #include <Eigen/LU>
 #include <Eigen/Dense>
@@ -87,7 +88,11 @@ public:
 
     void setImageSize(int w, int h, float fx, float fy, float cx, float cy);
 
+    void transformToRenderBuffer();
+
     void rsmTuning(const Eigen::Matrix4f &view);
+
+    void adptiveRenderToBuffer(const Eigen::Matrix4f &pose);
 
     void renderImage(const Eigen::Matrix4f &view);
 
@@ -102,6 +107,8 @@ public:
     std::pair<GLuint, GLuint> getConflict();
 
     std::pair<GLuint, GLuint> getUnstable();
+
+    std::pair<GLuint, GLuint> getRenderBuffer();
 
     unsigned int getOffset();
 
@@ -142,6 +149,8 @@ private:
 
     GLuint conflictVbo, conflictFid;
 
+    GLuint renderVbo, renderFid;                    // render the image (copy from modelVbo)
+
     GLuint unstableVbo;
 
     const int bufferSize;
@@ -152,6 +161,7 @@ private:
     unsigned int gsmViewcount;
     unsigned int offset;
     unsigned int dataCount;
+    unsigned int renderCount;
     unsigned int conflictCount;
     unsigned int unstableCount;
 
@@ -165,6 +175,7 @@ private:
     std::shared_ptr<Shader> updateConflictProgram; // update conflict model
     std::shared_ptr<Shader> backMappingProgram;     // re-mapping modelMap back to vbo
     std::shared_ptr<Shader> unstableProgram;        // concatenate new model
+    std::shared_ptr<Shader> adaptiveRenderToBufferProgram;  // Rendering
 
 
     std::shared_ptr<Shader> drawPointProgram;

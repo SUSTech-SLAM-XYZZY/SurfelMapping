@@ -14,15 +14,14 @@
  * Eigen::Vector2f y_t = {-0.5, -1};
  * RSM rsm();
  * rsm.x_t = x_t;
- * rms.y_t = y_t;
+ * rsm.y_t = y_t;
  * rsm.max_iter = 10;
  * rsm.increment_y_l = 2;
  * rsm.increment_y_s = 1;
  * rsm.step_x = 0.125;
  * rsm.step_y = 0.125;
- * ram.clear();
- * Eigen::MatrixX4f step_df;
- * rsm.run(step_df);
+ * rsm.clear();
+ * rsm.run();
  */
 class RSM {
 private:
