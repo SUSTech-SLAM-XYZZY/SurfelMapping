@@ -13,7 +13,7 @@
 #include <eigen3/Eigen/SVD>
 
 
-void RSM::appendMat(Eigen::MatrixX4f& mat1, const Eigen::Matrix4f& mat2) {
+void RSM::appendMat(Eigen::MatrixX4f& mat1, const Eigen::MatrixX4f& mat2) {
     mat1.conservativeResize(mat1.rows() + mat2.rows(), mat1.cols());
     mat1(Eigen::seq(mat1.rows() - mat2.rows(), mat1.rows()-1), Eigen::all) = mat2;
 }
@@ -40,12 +40,42 @@ Eigen::MatrixXf RSM::pinv_eigen_based(const Eigen::MatrixXf& origin, const float
     return V * S * U.transpose();
 }
 
-RSM::RSM(Eigen::Vector2f x_t, Eigen::Vector2f y_t):
-    x_t(std::move(x_t)),
-    y_t(std::move(y_t))
+RSM::RSM()
 {}
 
-void RSM::run(Eigen::MatrixX4f& step_df) {
+void RSM::clear() {
+    w = Eigen::VectorXf::Zero(1);
+    optim_sample = Eigen::Vector4f::Zero();
+    step_df = Eigen::MatrixX4f();
+}
+
+void RSM::nextStep(const Eigen::MatrixX4f& tmp_df, float increment_y) {
+    float mean_x = tmp_df.col(COLS::X).mean();
+    float mean_y = tmp_df.col(COLS::Y).mean();
+    float range_x = tmp_df.col(COLS::X).maxCoeff() - tmp_df.col(COLS::X).minCoeff();
+    float range_y = tmp_df.col(COLS::Y).maxCoeff() - tmp_df.col(COLS::Y).minCoeff();
+
+    float coef_x = w[0];
+    float coef_y = w[1];
+    float ratio = coef_x / (coef_y + 1e-8f);
+//    std::cout << "coef x = " << coef_x << ", coef y = " << coef_y << std::endl;
+
+    float _increment_x = abs(ratio) * increment_y * (coef_x > 0 ? 1.f : -1.f);
+    float _increment_y = increment_y * (coef_y > 0 ? 1.f : -1.f);
+//    std::cout << "increament x = " << _increment_x << ", increament y = " << _increment_y << std::endl;
+
+    float base_x = _increment_x * (range_x / 2) + mean_x;
+    float base_y = _increment_y * (range_y / 2) + mean_y;
+//    std::cout << "new x = " << base_x << ", new y = " << base_y << std::endl;
+
+    // update x_t, y_t next doe
+    x_t[0] = base_x - step_x;
+    x_t[1] = base_x + step_x;
+    y_t[0] = base_y - step_y;
+    y_t[1] = base_y + step_y;
+}
+
+void RSM::run() {
     for (int t=0; t<max_iter; t++) {
         // output model()
         Eigen::Matrix4f tmp_df;  // 4x4
@@ -74,37 +104,73 @@ void RSM::run(Eigen::MatrixX4f& step_df) {
         polyFit(X, y, 1);
 
         // next step
-        float mean_x = tmp_df.col(COLS::X).mean();
-        float mean_y = tmp_df.col(COLS::Y).mean();
-        float range_x = tmp_df.col(COLS::X).maxCoeff() - tmp_df.col(COLS::X).minCoeff();
-        float range_y = tmp_df.col(COLS::Y).maxCoeff() - tmp_df.col(COLS::Y).minCoeff();
-
-        float coef_x = w[0];
-        float coef_y = w[1];
-        float ratio = coef_x / (coef_y + 1e-8f);
-//        std::cout << "coef x = " << coef_x << ", coef y = " << coef_y << std::endl;
-
-        float _increment_x = abs(ratio) * increment_y * (coef_x > 0 ? 1.f : -1.f);
-        float _increment_y = increment_y * (coef_y > 0 ? 1.f : -1.f);
-//        std::cout << "increament x = " << _increment_x << ", increament y = " << _increment_y << std::endl;
-        float base_x = _increment_x * (range_x / 2) + mean_x;
-        float base_y = _increment_y * (range_y / 2) + mean_y;
-//        std::cout << "new x = " << base_x << ", new y = " << base_y << std::endl;
-        // update x_t, y_t next doe
-        x_t[0] = base_x - step_x;
-        x_t[1] = base_x + step_x;
-        y_t[0] = base_y - step_y;
-        y_t[1] = base_y + step_y;
+        nextStep(tmp_df, increment_y_l);
 
         // update step_df
         appendMat(step_df, tmp_df);
         float max_outcome = tmp_df.col(COLS::OUTCOME).maxCoeff();
 
         if (max_outcome < step_df.col(COLS::OUTCOME).maxCoeff()) {
+            // final step
+            Eigen::MatrixX4f final_df;
+            // -- final step with smaller increment
+            nextStep(tmp_df, increment_y_s);
+            t++;
+            const float mean_x = x_t.mean();
+            const float mean_y = y_t.mean();
+            const float range_x = x_t.maxCoeff() - x_t.minCoeff();
+            const float range_y = y_t.maxCoeff() - y_t.minCoeff();
+
+            // -- add center point
+            Eigen::Vector4f center_point;
+            float _x = mean_x, _y = mean_y;
+            center_point(COLS::X) = _x;
+            center_point(COLS::Y) = _y;
+            center_point(COLS::OUTCOME) = sample(_x, _y);
+            center_point(COLS::ITER) = float(t);
+            appendMat(final_df, center_point.transpose());
+            // -- add further points
+            Eigen::Matrix4f points;
+            {
+                _x = mean_x + range_x;
+                _y = mean_y;
+                points(0, COLS::X) = _x;
+                points(0, COLS::Y) = _y;
+                points(0, COLS::OUTCOME) = sample(_x, _y);
+                points(0, COLS::ITER) = float(t);
+
+                _x = mean_x - range_x;
+                _y = mean_y;
+                points(0, COLS::X) = _x;
+                points(0, COLS::Y) = _y;
+                points(0, COLS::OUTCOME) = sample(_x, _y);
+                points(0, COLS::ITER) = float(t);
+
+                _x = mean_x;
+                _y = mean_y + range_y;
+                points(0, COLS::X) = _x;
+                points(0, COLS::Y) = _y;
+                points(0, COLS::OUTCOME) = sample(_x, _y);
+                points(0, COLS::ITER) = float(t);
+
+                _x = mean_x;
+                _y = mean_y - range_y;
+                points(0, COLS::X) = _x;
+                points(0, COLS::Y) = _y;
+                points(0, COLS::OUTCOME) = sample(_x, _y);
+                points(0, COLS::ITER) = float(t);
+            }
+            appendMat(final_df, points);
+
+            appendMat(step_df, final_df);
             break;
-            // TODO: add final step
         }
     }
+
+    // update optimal
+    Eigen::MatrixXf::Index row_idx;
+    step_df.col(COLS::OUTCOME).maxCoeff(&row_idx);
+    optim_sample = step_df(row_idx, Eigen::all);
 }
 
 void RSM::polyFit(const Eigen::MatrixX2f& X,
@@ -157,10 +223,14 @@ float sample_impl_test(float x, float y) {
 
 float sample_impl(float x, float y) {
     // TODO: change sample to error func
+
 }
 
 float RSM::sample(float x, float y) {
     return sample_impl_test(x, y);
 }
 
+const Eigen::Vector4f& RSM::get_optimal_sample() {
+    return optim_sample;
+}
 

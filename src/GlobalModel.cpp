@@ -810,7 +810,14 @@ void GlobalModel::setImageSize(int w, int h, float fx, float fy, float cx, float
 void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
     pangolin::GlFramebuffer imageFramebuffer;
     // load imageTexture  semanticTexture  depthTexture  imageRenderBuffer
+    glBindBuffer(GL_COPY_READ_BUFFER, modelVbo);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, modelVbo);
 
+    glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, count * Config::vertexSize(), unstableCount * Config::vertexSize());
+
+    int rsmCount = count;
+
+    glFinish();
 }
 
 void GlobalModel::renderImage(const Eigen::Matrix4f &view)

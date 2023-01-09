@@ -402,7 +402,7 @@ void test() {
     Eigen::Vector2f y_t = {-0.5, -1};
     RSM rsm(x_t, y_t);
     Eigen::MatrixX4f step_df;
-    rsm.run(step_df);
+    rsm.run();
 }
 
 void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Matrix4f> &views,
