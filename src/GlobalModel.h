@@ -94,6 +94,8 @@ public:
 
     void adptiveRenderToBuffer(const Eigen::Matrix4f &pose);
 
+    void RenderingImageToTexture(const Eigen::Matrix4f &view);
+
     void renderImage(const Eigen::Matrix4f &view);
 
     std::pair<GLuint, GLuint> getModel();
@@ -181,6 +183,7 @@ private:
     std::shared_ptr<Shader> drawPointProgram;
     std::shared_ptr<Shader> drawSurfelProgram;
     std::shared_ptr<Shader> drawImageProgram;
+    std::shared_ptr<Shader> renderImageToBufferProgram;
 
 
     //We render whole vertices into 3 texturefs. Must be synchronize with modelVbo

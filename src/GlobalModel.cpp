@@ -26,6 +26,7 @@ GlobalModel::GlobalModel()
    drawPointProgram(loadProgramFromFile("draw_feedback.vert", "draw_feedback.frag")),
    drawSurfelProgram(loadProgramFromFile("draw_surface.vert", "draw_surface_adaptive.geom", "draw_surface.frag")),
    drawImageProgram(loadProgramFromFile("draw_image.vert", "draw_image_adaptive.geom", "draw_image.frag")),
+   renderImageToBufferProgram(loadProgramFromFile("draw_image.vert", "draw_image.geom", "draw_image.frag")),
    //drawImageProgram(loadProgramFromFile("empty.vert", "quad.geom", "draw_image.frag")),
    modelMapRenderBuffer(TEXTURE_DIMENSION, TEXTURE_DIMENSION),
    vertConfRenderBuffer(TEXTURE_DIMENSION, TEXTURE_DIMENSION),
@@ -903,6 +904,58 @@ void GlobalModel::adptiveRenderToBuffer(const Eigen::Matrix4f &pose)
     glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
 
     adaptiveRenderToBufferProgram->Unbind();
+
+    glFinish();
+
+    CheckGlDieOnError()
+}
+
+void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view){
+    pangolin::GlFramebuffer imageFramebuffer;
+    imageFramebuffer.AttachColour(imageTexture);
+    imageFramebuffer.AttachColour(semanticTexture);
+    //imageFramebuffer.AttachColour(depthTexture);
+    imageFramebuffer.AttachDepth(imageRenderBuffer);
+
+    imageFramebuffer.Bind();
+
+    glPushAttrib(GL_VIEWPORT_BIT);
+
+    glViewport(0, 0, imageRenderBuffer.width, imageRenderBuffer.height);
+
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    renderImageToBufferProgram->Bind();
+
+    Eigen::Matrix4f t_inv = view.inverse();
+    renderImageToBufferProgram->setUniform(Uniform("t_inv", t_inv));
+    renderImageToBufferProgram->setUniform(Uniform("cam", imageCam));
+    renderImageToBufferProgram->setUniform(Uniform("cols", (float)imageRenderBuffer.width));
+    renderImageToBufferProgram->setUniform(Uniform("rows", (float)imageRenderBuffer.height));
+    renderImageToBufferProgram->setUniform(Uniform("maxDepth", 200.f));
+    renderImageToBufferProgram->setUniform(Uniform("threshold", 0.f));
+
+    glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), 0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 1));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 2));
+
+    glDrawArrays(GL_POINTS, 0, renderCount);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    renderImageToBufferProgram->Unbind();
+
+    glPopAttrib();
+
+    imageFramebuffer.Unbind();
 
     glFinish();
 
