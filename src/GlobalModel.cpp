@@ -849,6 +849,9 @@ void GlobalModel::transformToBuffer(std::pair<GLuint, GLuint> source, std::pair<
 }
 
 void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
+    // to load buffer data
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bufferMatrix;
+
     float * vertexData = this->getVertexDataFromBuffer(this->renderVbo, renderCount);
     Eigen::MatrixXf vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertexData, renderCount, 12);
     for(int i = 0; i < renderCount; i++){
@@ -871,8 +874,9 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
         // fetch out data
         auto readyTransVertex = vertex.row(i);
         Eigen::Vector4f new_normal;
+        new_normal << 0, 0, 0, 0;
         // trans the vertex due to x & y
-//        this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, ans(RSM::COLS::X), ans(RSM::COLS::Y));
+        this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, ans(RSM::COLS::X), ans(RSM::COLS::Y));
         std::cout << "=====1=====" << std::endl << new_normal.transpose() << std::endl;
         std::cout << "=====2=====" << std::endl << readyTransVertex.tail(4) << std::endl;
         std::cout << "=====3=====" << std::endl << ans.transpose() << std::endl;
@@ -895,9 +899,12 @@ void GlobalModel::transfromRenderBuffer(float x, float y, int vertex_id, const E
     // trans the vertex due to x & y
     this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, x, y);
     readyTransVertex.tail(4) = new_normal;
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bufferMatrix = vertexData.cast<float>();
     // transfrom back
+    this->clearBuffer(tmpVbo, 0.0f);
     glBindBuffer(GL_ARRAY_BUFFER, tmpVbo);
-    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), vertexData.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), bufferMatrix.data(), GL_STATIC_DRAW);
+    tmpCount = renderCount;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -983,6 +990,7 @@ void GlobalModel::adptiveRenderToBuffer(const Eigen::Matrix4f &pose)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+    glDisable(GL_RASTERIZER_DISCARD);
 
     adaptiveRenderToBufferProgram->Unbind();
 
@@ -1068,6 +1076,8 @@ double GlobalModel::getError(const Eigen::Matrix4f &view, int frameid){
 
     cv::Mat image(Config::H(), Config::W(), CV_8UC3);
     memcpy(image.data, texturePtr, Config::W() * Config::H() * 3);
+
+//    cv::imwrite("tt.png", image);
 
     delete(texturePtr);
 
@@ -1381,8 +1391,8 @@ float * GlobalModel::getVertexDataFromBuffer(GLuint buffer, int vcount){
     // for debug
 //    Eigen::MatrixXf vertex;
 //    vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertices, vcount, 12);
-
-//    std::ofstream fout("matrixTest", std::ios::app);
+//
+//    std::ofstream fout("matrixTest", std::ios::trunc);
 //    fout << vertex << std::endl;
 //    fout.flush();
 
