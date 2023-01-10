@@ -14,6 +14,11 @@
 #include <Eigen/LU>
 #include <Eigen/Dense>
 
+#include <iomanip>
+#include "Utils/Error.h"
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+
 class GlobalModel
 {
 public:
@@ -90,7 +95,7 @@ public:
 
     void transformToRenderBuffer();
 
-    void rsmTuning(const Eigen::Matrix4f &view);
+    void rsmTuning(const Eigen::Matrix4f &view, int frameid);
 
     void rotateNormal(const Eigen::Vector4f& position,
                       const Eigen::Vector4f& normal,
@@ -102,6 +107,10 @@ public:
     void adptiveRenderToBuffer(const Eigen::Matrix4f &pose);
 
     void RenderingImageToTexture(const Eigen::Matrix4f &view);
+
+    double getRGBImgLoss(cv::Mat& paired_Img, int frame_id);
+
+    double getError(const Eigen::Matrix4f &view, int frameid);
 
     void renderImage(const Eigen::Matrix4f &view);
 

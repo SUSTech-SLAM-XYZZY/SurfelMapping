@@ -842,7 +842,33 @@ void GlobalModel::transformToRenderBuffer(){
     CheckGlDieOnError()
 }
 
-void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
+void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
+    // get vertex from buffer
+    float * renderVertex = this->getVertexDataFromBuffer(renderVbo, renderCount);
+    Eigen::MatrixXf rsmVertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(renderVertex, renderCount, 12);
+
+    double T = 10000;
+    double dT = 0.98;
+    const double eps = 1e-10;
+
+    double x = renderCount * rand()/(RAND_MAX + 1.0);
+    double n = func(x);
+    double ans = n;
+    while(T > eps){
+        double newx = x + (2 * rand() - RAND_MAX) * T;
+        while(newx < 0 && newx > 100) newx = x + (2 * rand() - RAND_MAX) * T;
+        double next = func(newx);
+        ans = std::max(n, next);
+        if(next - n > eps){
+            x = newx;
+            n = next;
+        }else if(exp((next - n) / T) * RAND_MAX > rand()){
+            x = newx;
+            n = next;
+        }
+        T *= dT;  // 降温
+    }
+
     Eigen::Vector2f x_t = {1, 1};
     Eigen::Vector2f y_t = {0, 0};
     RSM rsm(nullptr);
@@ -997,6 +1023,35 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view){
     glFinish();
 
     CheckGlDieOnError()
+}
+
+double GlobalModel::getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
+    std::string rgb_path = "/home/bill/prog/Surfel/dataset/image_2/";
+    // calc the loss
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << frame_id;
+    std::string file_name = ss.str() + ".png";
+
+    cv::Mat rgb = cv::imread(rgb_path + file_name, cv::IMREAD_COLOR);
+
+    std::cout << "Frame " << frame_id << std::endl;
+    std::cout << "PSNR = " << getPSNR(paired_Img, rgb) << std::endl;
+    std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
+
+    return getPSNR(paired_Img, rgb);
+}
+
+double GlobalModel::getError(const Eigen::Matrix4f &view, int frameid){
+    auto texturePtr = new unsigned char [Config::W() * Config::H() * 3];
+    this->RenderingImageToTexture(view);
+    this->getImageTex()->Download(texturePtr, GL_RGB_INTEGER, GL_UNSIGNED_BYTE);
+
+    CheckGlDieOnError()
+
+    cv::Mat image(Config::H(), Config::W(), CV_8UC3);
+    memcpy(image.data, texturePtr, Config::W() * Config::H() * 3);
+
+    return this->getRGBImgLoss(image, frameid);
 }
 
 void GlobalModel::renderImage(const Eigen::Matrix4f &view)
@@ -1505,4 +1560,3 @@ void GlobalModel::ICP(GLuint GlobalSurfelInView, int ViewCount, GLuint LSModel, 
     Eigen::MatrixXf LSMvertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(LSM, LSMcount, 12);
     
 }
-
