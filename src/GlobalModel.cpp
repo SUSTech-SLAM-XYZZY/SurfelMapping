@@ -845,7 +845,7 @@ void GlobalModel::transformToRenderBuffer(){
 void GlobalModel::rsmTuning(const Eigen::Matrix4f &view) {
     Eigen::Vector2f x_t = {1, 1};
     Eigen::Vector2f y_t = {0, 0};
-    RSM rsm;
+    RSM rsm(nullptr);
     rsm.x_t = x_t;
     rsm.y_t = y_t;
     rsm.max_iter = 10;

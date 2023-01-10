@@ -6,6 +6,8 @@
 
 #include <eigen3/Eigen/Core>
 
+class GlobalModel;
+
 /**
  * An simple RSM class implemented in Eigen
  *
@@ -25,6 +27,8 @@
  */
 class RSM {
 private:
+
+    RSM() {}
 
     Eigen::VectorXf w;
 
@@ -49,9 +53,13 @@ private:
      */
     Eigen::VectorXf predict(const Eigen::MatrixX2f& X) const;
 
-    static float sample(float x, float y);
+    static float sample_test(float x, float y);
+
+    float sample(float x, float y);
 
     Eigen::Vector4f optim_sample;
+
+    GlobalModel* globalModel;
 
 
     // Utilities
@@ -86,7 +94,7 @@ public:
     float step_y = 0.125;
 
 
-    RSM();
+    RSM(GlobalModel* globalModel): globalModel(globalModel) {}
 
     /**
      * Run RSM tuning <br/>

@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <eigen3/Eigen/QR>
 #include <eigen3/Eigen/SVD>
+#include "GlobalModel.h"
 
 
 void RSM::appendMat(Eigen::MatrixX4f& mat1, const Eigen::MatrixX4f& mat2) {
@@ -39,9 +40,6 @@ Eigen::MatrixXf RSM::pinv_eigen_based(const Eigen::MatrixXf& origin, const float
     // pinv_matrix = V * S * U^T
     return V * S * U.transpose();
 }
-
-RSM::RSM()
-{}
 
 void RSM::clear() {
     w = Eigen::VectorXf::Zero(1);
@@ -210,7 +208,18 @@ Eigen::VectorXf RSM::predict(const Eigen::MatrixX2f& X) const {
     return X_ * w;
 }
 
-float sample_impl_test(float x, float y) {
+float RSM::sample(float x, float y) {
+    // TODO: change sample to error func
+    if (globalModel == nullptr) {
+        std::cout << "RSM::globalModel not initialized!" << std::endl;
+        return 0.0f;
+    }
+//    float result = globalModel->someFunction();
+//    return result;
+    return 0.0f;
+}
+
+float RSM::sample_test(float x, float y) {
     double x0, y0, fwhm;
     x0 = 0.08324215259452938;
     y0 = 0.5832421525945294;
@@ -219,15 +228,6 @@ float sample_impl_test(float x, float y) {
     double func = 10.f * exp(-4*log(2) * (pow(x-x0, 2) + pow(y-y0, 2)) / pow(fwhm, 2));
 
     return float(func);
-}
-
-float sample_impl(float x, float y) {
-    // TODO: change sample to error func
-
-}
-
-float RSM::sample(float x, float y) {
-    return sample_impl_test(x, y);
 }
 
 const Eigen::Vector4f& RSM::get_optimal_sample() {
