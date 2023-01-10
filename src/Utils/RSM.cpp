@@ -65,6 +65,8 @@ void RSM::nextStep(const Eigen::MatrixX4f& tmp_df, float increment_y) {
     float base_x = _increment_x * (range_x / 2) + mean_x;
     float base_y = _increment_y * (range_y / 2) + mean_y;
 //    std::cout << "new x = " << base_x << ", new y = " << base_y << std::endl;
+    base_x = fmod(base_x, 360.0f);
+    base_y = fmod(base_y, 360.0f);
 
     // update x_t, y_t next doe
     x_t[0] = base_x - step_x;
@@ -74,6 +76,11 @@ void RSM::nextStep(const Eigen::MatrixX4f& tmp_df, float increment_y) {
 }
 
 void RSM::run() {
+    step_df.resize(1, 4);
+    step_df(0, COLS::X) = 0.0f;
+    step_df(0, COLS::Y) = 0.0f;
+    step_df(0, COLS::OUTCOME) = sample(0.0f, 0.0f);
+    step_df(0, COLS::ITER) = 0.0f;
     for (int t=0; t<max_iter; t++) {
         // output model()
         Eigen::Matrix4f tmp_df;  // 4x4

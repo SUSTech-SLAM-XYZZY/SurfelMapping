@@ -855,16 +855,16 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
     float * vertexData = this->getVertexDataFromBuffer(this->renderVbo, renderCount);
     Eigen::MatrixXf vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertexData, renderCount, 12);
     for(int i = 0; i < renderCount; i++){
-        Eigen::Vector2f x_t = {1, 1};
-        Eigen::Vector2f y_t = {0, 0};
         RSM rsm(this);
-        rsm.x_t = x_t;
-        rsm.y_t = y_t;
-        rsm.max_iter = 100;
-        rsm.increment_y_l = 5.0f;
-        rsm.increment_y_s = 2.5f;
         rsm.step_x = 0.5;
         rsm.step_y = 0.5;
+        Eigen::Vector2f x_t = {rsm.step_x, -rsm.step_x};
+        Eigen::Vector2f y_t = {rsm.step_y, -rsm.step_y};
+        rsm.x_t = x_t;
+        rsm.y_t = y_t;
+        rsm.max_iter = 20;
+        rsm.increment_y_l = 3.0f;
+        rsm.increment_y_s = 1.0f;
         rsm.frame_id = frameid;
         rsm.view = view;
         rsm.vertex_id = i;
@@ -916,7 +916,6 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
                                const Eigen::Matrix4f& view,
                                float yaw,
                                float pitch) {
-    const float eps = 1e-5f;
     const Eigen::Matrix4f t_inv_4f = view.inverse();
     const Eigen::Matrix3f t_inv = t_inv_4f.topLeftCorner<3, 3>();
     const Eigen::Vector3f position_3f = position.head<3>();
@@ -936,15 +935,16 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
     x.normalize();
     Eigen::Vector3f y = z.cross(x);
     y.normalize();
-    if ((x(1) < eps && x(2) < eps && x(3) < eps) ||
-        (y(1) < eps && y(2) < eps && y(3) < eps)) {
-        std::cout << "GlobalModel::rotateNormal gets nan" << std::endl;
+    const float eps = 1e-4f;
+    if ((x.norm() < 1-eps) ||
+        (y.norm() < 1-eps)) {
+        std::cout << "GlobalModel::rotateNormal gets nan\nx=" << x << ", y=" << y << std::endl;
         new_normal = normal;
         return;
     }
 
     // rotate normal
-    Eigen::Matrix3f rot;
+    Eigen::Matrix3f rot = Eigen::Matrix3f::Zero();
     rot = Eigen::AngleAxisf(yaw/180.f * M_PI, y)
           * Eigen::AngleAxisf(pitch/180.f * M_PI, x);
     Eigen::Vector3f new_vNormRad = rot * vNormRad;
@@ -1062,7 +1062,7 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view, std::pair
 }
 
 double GlobalModel::getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
-    std::string rgb_path = "/home/bill/prog/Surfel/dataset/image_2/";
+    std::string rgb_path = "/src/data/SurfelMapping-kitti02/image_2/";
     // calc the loss
     std::stringstream ss;
     ss << std::setfill('0') << std::setw(6) << frame_id;
