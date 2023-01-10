@@ -889,7 +889,7 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
     glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), bufferMatrix.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    free(vertexData);
+    delete(vertexData);
 
     CheckGlDieOnError()
 }
@@ -936,8 +936,8 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
     x.normalize();
     Eigen::Vector3f y = z.cross(x);
     y.normalize();
-    if ((x(1) < eps && x(2) < eps && x(3) < eps) ||
-        (y(1) < eps && y(2) < eps && y(3) < eps)) {
+    if ((x(0) < eps && x(1) < eps && x(2) < eps) ||
+        (y(0) < eps && y(1) < eps && y(2) < eps)) {
         std::cout << "GlobalModel::rotateNormal gets nan" << std::endl;
         new_normal = normal;
         return;
