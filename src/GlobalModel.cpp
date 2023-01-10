@@ -867,8 +867,21 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
         rsm.vertex_id = i;
         rsm.vertexData = vertex;
         rsm.run();
-        std::cout << rsm.get_optimal_sample() << std::endl;
+        auto ans = rsm.get_optimal_sample();
+        // fetch out data
+        auto readyTransVertex = vertex.row(i);
+        Eigen::Vector4f new_normal;
+        // trans the vertex due to x & y
+        this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, ans(RSM::COLS::X), ans(RSM::COLS::Y));
+        readyTransVertex.tail(4) = new_normal;
     }
+    // transfrom it into renderBuffer
+    this->clearBuffer(renderVbo, 0.0f);
+    glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
+    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), vertex.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    CheckGlDieOnError()
 }
 
 void GlobalModel::transfromRenderBuffer(float x, float y, int vertex_id, const Eigen::Matrix4f& view, Eigen::MatrixXf vertexData){

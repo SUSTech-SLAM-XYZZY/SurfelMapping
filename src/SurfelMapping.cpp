@@ -431,6 +431,8 @@ void SurfelMapping::acquireImages(std::string path, const std::vector<Eigen::Mat
 
         globalModel.rsmTuning(v, startId);
 
+        globalModel.RenderingImageToTexture(v, globalModel.getRenderBuffer());
+
 //        globalModel.renderImage(v);
 
         //---------------------------------------------
