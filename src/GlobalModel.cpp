@@ -883,9 +883,10 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
         readyTransVertex.tail(4) = new_normal;
     }
     // transfrom it into renderBuffer
+    bufferMatrix = vertex.cast<float>();
     this->clearBuffer(renderVbo, 0.0f);
     glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
-    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), vertex.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), bufferMatrix.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     free(vertexData);
@@ -896,6 +897,7 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
 void GlobalModel::transfromRenderBuffer(float x, float y, int vertex_id, const Eigen::Matrix4f& view, Eigen::MatrixXf vertexData){
     auto readyTransVertex = vertexData.row(vertex_id);
     Eigen::Vector4f new_normal;
+    new_normal << 0, 0, 0, 0;
     // trans the vertex due to x & y
     this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, x, y);
     readyTransVertex.tail(4) = new_normal;
