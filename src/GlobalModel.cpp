@@ -1062,7 +1062,7 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view, std::pair
 }
 
 double GlobalModel::getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
-    std::string rgb_path = "/src/data/SurfelMapping-kitti02/image_2/";
+    std::string rgb_path = "/home/bill/prog/Surfel/dataset/image_2/";
     // calc the loss
     std::stringstream ss;
     ss << std::setfill('0') << std::setw(6) << frame_id;
