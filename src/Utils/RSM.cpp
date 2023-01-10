@@ -44,7 +44,7 @@ Eigen::MatrixXf RSM::pinv_eigen_based(const Eigen::MatrixXf& origin, const float
 void RSM::clear() {
     w = Eigen::VectorXf::Zero(1);
     optim_sample = Eigen::Vector4f::Zero();
-    step_df = Eigen::MatrixX4f();
+    step_df.resize(0, 4);
 }
 
 void RSM::nextStep(const Eigen::MatrixX4f& tmp_df, float increment_y) {

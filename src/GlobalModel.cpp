@@ -914,6 +914,7 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
                                const Eigen::Matrix4f& view,
                                float yaw,
                                float pitch) {
+    const float eps = 1e-5f;
     const Eigen::Matrix4f t_inv_4f = view.inverse();
     const Eigen::Matrix3f t_inv = t_inv_4f.topLeftCorner<3, 3>();
     const Eigen::Vector3f position_3f = position.head<3>();
@@ -932,7 +933,13 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
     Eigen::Vector3f x = up.cross(z);
     x.normalize();
     Eigen::Vector3f y = z.cross(x);
-    z.normalize();
+    y.normalize();
+    if ((x(1) < eps && x(2) < eps && x(3) < eps) ||
+        (y(1) < eps && y(2) < eps && y(3) < eps)) {
+        std::cout << "GlobalModel::rotateNormal gets nan" << std::endl;
+        new_normal = normal;
+        return;
+    }
 
     // rotate normal
     Eigen::Matrix3f rot;
@@ -940,7 +947,8 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
           * Eigen::AngleAxisf(pitch/180.f * M_PI, x);
     Eigen::Vector3f new_vNormRad = rot * vNormRad;
 
-    Eigen::Vector3f new_normal_3f = t_inv.inverse() * new_vNormRad;
+    Eigen::Matrix3f view_3f = view.topLeftCorner<3, 3>();
+    Eigen::Vector3f new_normal_3f = view_3f * new_vNormRad;
     new_normal.head<3>() = new_normal_3f;
     new_normal(3) = normal(3);
 }
