@@ -889,7 +889,7 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
     glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), bufferMatrix.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    free(vertexData);
+    delete(vertexData);
 
     CheckGlDieOnError()
 }
