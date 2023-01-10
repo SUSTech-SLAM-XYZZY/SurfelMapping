@@ -99,7 +99,7 @@ public:
 
     void transfromRenderBuffer(float x, float y, int vertex_id, const Eigen::Matrix4f& view, Eigen::MatrixXf vertexData);
 
-    void rotateNormal(const Eigen::Vector4f& position,
+    static void rotateNormal(const Eigen::Vector4f& position,
                       const Eigen::Vector4f& normal,
                       Eigen::Vector4f& new_normal,
                       const Eigen::Matrix4f& view,

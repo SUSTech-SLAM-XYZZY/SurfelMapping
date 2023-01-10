@@ -857,11 +857,11 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
         RSM rsm(this);
         rsm.x_t = x_t;
         rsm.y_t = y_t;
-        rsm.max_iter = 10;
-        rsm.increment_y_l = 1;
-        rsm.increment_y_s = 1;
-        rsm.step_x = 0.005;
-        rsm.step_y = 0.005;
+        rsm.max_iter = 100;
+        rsm.increment_y_l = 5.0f;
+        rsm.increment_y_s = 2.5f;
+        rsm.step_x = 0.5;
+        rsm.step_y = 0.5;
         rsm.frame_id = frameid;
         rsm.view = view;
         rsm.vertex_id = i;
@@ -911,8 +911,8 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
 
     // rotate normal
     Eigen::Matrix3f rot;
-    rot = Eigen::AngleAxisf(yaw * M_PI, y)
-          * Eigen::AngleAxisf(pitch * M_PI, x);
+    rot = Eigen::AngleAxisf(yaw/180.f * M_PI, y)
+          * Eigen::AngleAxisf(pitch/180.f * M_PI, x);
     Eigen::Vector3f new_vNormRad = rot * vNormRad;
 
     Eigen::Vector3f new_normal_3f = t_inv.inverse() * new_vNormRad;
