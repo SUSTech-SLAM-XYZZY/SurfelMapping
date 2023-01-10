@@ -889,7 +889,7 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
     glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), bufferMatrix.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    free(vertexData);
+    delete(vertexData);
 
     CheckGlDieOnError()
 }
@@ -916,6 +916,7 @@ void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
                                const Eigen::Matrix4f& view,
                                float yaw,
                                float pitch) {
+    const float eps = 1e-5f;
     const Eigen::Matrix4f t_inv_4f = view.inverse();
     const Eigen::Matrix3f t_inv = t_inv_4f.topLeftCorner<3, 3>();
     const Eigen::Vector3f position_3f = position.head<3>();
@@ -1062,7 +1063,7 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view, std::pair
 }
 
 double GlobalModel::getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
-    std::string rgb_path = "/src/data/SurfelMapping-kitti02/image_2/";
+    std::string rgb_path = "/home/bill/prog/Surfel/dataset/image_2/";
     // calc the loss
     std::stringstream ss;
     ss << std::setfill('0') << std::setw(6) << frame_id;
