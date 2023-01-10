@@ -214,9 +214,11 @@ float RSM::sample(float x, float y) {
         std::cout << "RSM::globalModel not initialized!" << std::endl;
         return 0.0f;
     }
+    globalModel->transfromRenderBuffer(x, y, vertex_id, view, vertexData);
+    double err = globalModel->getError(view, frame_id);
 //    float result = globalModel->someFunction();
 //    return result;
-    return 0.0f;
+    return err;
 }
 
 float RSM::sample_test(float x, float y) {

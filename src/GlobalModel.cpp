@@ -12,6 +12,7 @@ GlobalModel::GlobalModel()
    conflictCount(0),
    unstableCount(0),
    renderCount(0),
+   tmpCount(0),
    initProgram(loadProgramFromFile("init_unstable.vert")),
    modelProgram(loadProgramFromFile("map.vert", "map.frag")),
    dataProgram(loadProgramGeomFromFile("data.vert", "data.geom")),
@@ -43,6 +44,12 @@ GlobalModel::GlobalModel()
     glGenTransformFeedbacks(1, &renderFid);
     glGenBuffers(1, &renderVbo);
     glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
+    glBufferData(GL_ARRAY_BUFFER, bufferSize, nullptr, GL_DYNAMIC_COPY);  // only allocate space
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenTransformFeedbacks(1, &tmpFid);
+    glGenBuffers(1, &tmpVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, tmpVbo);
     glBufferData(GL_ARRAY_BUFFER, bufferSize, nullptr, GL_DYNAMIC_COPY);  // only allocate space
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -828,12 +835,11 @@ void GlobalModel::setImageSize(int w, int h, float fx, float fy, float cx, float
     imageCam << cx, cy, fx, fy;
 }
 
-void GlobalModel::transformToRenderBuffer(){
-    std::pair<GLuint, GLuint> source = this->getModel();
-    renderCount = source.second;  // no use ?
+void GlobalModel::transformToBuffer(std::pair<GLuint, GLuint> source, std::pair<GLuint, GLuint> target){
+    target.second = source.second;
     // load imageTexture  semanticTexture  depthTexture  imageRenderBuffer
     glBindBuffer(GL_COPY_READ_BUFFER, source.first);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, renderVbo);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, target.first);
 
     glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, source.second * Config::vertexSize());
 
@@ -843,44 +849,38 @@ void GlobalModel::transformToRenderBuffer(){
 }
 
 void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
-    // get vertex from buffer
-    float * renderVertex = this->getVertexDataFromBuffer(renderVbo, renderCount);
-    Eigen::MatrixXf rsmVertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(renderVertex, renderCount, 12);
-
-    double T = 10000;
-    double dT = 0.98;
-    const double eps = 1e-10;
-
-    double x = renderCount * rand()/(RAND_MAX + 1.0);
-    double n = func(x);
-    double ans = n;
-    while(T > eps){
-        double newx = x + (2 * rand() - RAND_MAX) * T;
-        while(newx < 0 && newx > 100) newx = x + (2 * rand() - RAND_MAX) * T;
-        double next = func(newx);
-        ans = std::max(n, next);
-        if(next - n > eps){
-            x = newx;
-            n = next;
-        }else if(exp((next - n) / T) * RAND_MAX > rand()){
-            x = newx;
-            n = next;
-        }
-        T *= dT;  // 降温
+    float * vertexData = this->getVertexDataFromBuffer(this->renderVbo, renderCount);
+    Eigen::MatrixXf vertex = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(vertexData, renderCount, 12);
+    for(int i = 0; i < renderCount; i++){
+        Eigen::Vector2f x_t = {1, 1};
+        Eigen::Vector2f y_t = {0, 0};
+        RSM rsm(this);
+        rsm.x_t = x_t;
+        rsm.y_t = y_t;
+        rsm.max_iter = 10;
+        rsm.increment_y_l = 1;
+        rsm.increment_y_s = 1;
+        rsm.step_x = 0.005;
+        rsm.step_y = 0.005;
+        rsm.frame_id = frameid;
+        rsm.view = view;
+        rsm.vertex_id = i;
+        rsm.vertexData = vertex;
+        rsm.run();
+        std::cout << rsm.get_optimal_sample() << std::endl;
     }
+}
 
-    Eigen::Vector2f x_t = {1, 1};
-    Eigen::Vector2f y_t = {0, 0};
-    RSM rsm(nullptr);
-    rsm.x_t = x_t;
-    rsm.y_t = y_t;
-    rsm.max_iter = 10;
-    rsm.increment_y_l = 1;
-    rsm.increment_y_s = 1;
-    rsm.step_x = 0.005;
-    rsm.step_y = 0.005;
-    rsm.clear();
-    rsm.run();
+void GlobalModel::transfromRenderBuffer(float x, float y, int vertex_id, const Eigen::Matrix4f& view, Eigen::MatrixXf vertexData){
+    auto readyTransVertex = vertexData.row(vertex_id);
+    Eigen::Vector4f new_normal;
+    // trans the vertex due to x & y
+    this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, x, y);
+    readyTransVertex.tail(4) = new_normal;
+    // transfrom back
+    glBindBuffer(GL_ARRAY_BUFFER, tmpVbo);
+    glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), vertexData.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void GlobalModel::rotateNormal(const Eigen::Vector4f& position,
@@ -973,7 +973,7 @@ void GlobalModel::adptiveRenderToBuffer(const Eigen::Matrix4f &pose)
     CheckGlDieOnError()
 }
 
-void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view){
+void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view, std::pair<GLuint, GLuint> Vbo){
     pangolin::GlFramebuffer imageFramebuffer;
     imageFramebuffer.AttachColour(imageTexture);
     imageFramebuffer.AttachColour(semanticTexture);
@@ -999,7 +999,7 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view){
     renderImageToBufferProgram->setUniform(Uniform("maxDepth", 200.f));
     renderImageToBufferProgram->setUniform(Uniform("threshold", 0.f));
 
-    glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, Vbo.first);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), 0);
     glEnableVertexAttribArray(1);
@@ -1007,7 +1007,7 @@ void GlobalModel::RenderingImageToTexture(const Eigen::Matrix4f &view){
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, Config::vertexSize(), reinterpret_cast<GLvoid*>(sizeof(Eigen::Vector4f) * 2));
 
-    glDrawArrays(GL_POINTS, 0, renderCount);
+    glDrawArrays(GL_POINTS, 0, Vbo.second);
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
@@ -1034,16 +1034,16 @@ double GlobalModel::getRGBImgLoss(cv::Mat& paired_Img, int frame_id){
 
     cv::Mat rgb = cv::imread(rgb_path + file_name, cv::IMREAD_COLOR);
 
-    std::cout << "Frame " << frame_id << std::endl;
-    std::cout << "PSNR = " << getPSNR(paired_Img, rgb) << std::endl;
-    std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
+//    std::cout << "Frame " << frame_id << std::endl;
+//    std::cout << "PSNR = " << getPSNR(paired_Img, rgb) << std::endl;
+//    std::cout << "SSIM = " << getMSSIM(paired_Img, rgb) << std::endl;
 
     return getPSNR(paired_Img, rgb);
 }
 
 double GlobalModel::getError(const Eigen::Matrix4f &view, int frameid){
     auto texturePtr = new unsigned char [Config::W() * Config::H() * 3];
-    this->RenderingImageToTexture(view);
+    this->RenderingImageToTexture(view, this->getmpBuffer());
     this->getImageTex()->Download(texturePtr, GL_RGB_INTEGER, GL_UNSIGNED_BYTE);
 
     CheckGlDieOnError()
@@ -1140,6 +1140,11 @@ std::pair<GLuint, GLuint> GlobalModel::getModel()
 std::pair<GLuint, GLuint> GlobalModel::getRenderBuffer()
 {
     return {renderVbo, renderCount};
+}
+
+std::pair<GLuint, GLuint> GlobalModel::getmpBuffer()
+{
+    return {tmpVbo, tmpCount};
 }
 
 std::pair<GLuint, GLuint> GlobalModel::getLocalModel()

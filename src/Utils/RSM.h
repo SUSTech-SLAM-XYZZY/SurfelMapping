@@ -93,6 +93,11 @@ public:
     float step_x = 0.125;       // sample step
     float step_y = 0.125;
 
+    int frame_id;
+    int vertex_id;
+    Eigen::Matrix4f view;
+    Eigen::MatrixXf vertexData;
+
 
     RSM(GlobalModel* globalModel): globalModel(globalModel) {}
 

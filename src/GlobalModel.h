@@ -93,9 +93,11 @@ public:
 
     void setImageSize(int w, int h, float fx, float fy, float cx, float cy);
 
-    void transformToRenderBuffer();
+    void transformToBuffer(std::pair<GLuint, GLuint> source, std::pair<GLuint, GLuint> target);
 
     void rsmTuning(const Eigen::Matrix4f &view, int frameid);
+
+    void transfromRenderBuffer(float x, float y, int vertex_id, const Eigen::Matrix4f& view, Eigen::MatrixXf vertexData);
 
     void rotateNormal(const Eigen::Vector4f& position,
                       const Eigen::Vector4f& normal,
@@ -106,7 +108,7 @@ public:
 
     void adptiveRenderToBuffer(const Eigen::Matrix4f &pose);
 
-    void RenderingImageToTexture(const Eigen::Matrix4f &view);
+    void RenderingImageToTexture(const Eigen::Matrix4f &view,  std::pair<GLuint, GLuint> Vbo);
 
     double getRGBImgLoss(cv::Mat& paired_Img, int frame_id);
 
@@ -127,6 +129,8 @@ public:
     std::pair<GLuint, GLuint> getUnstable();
 
     std::pair<GLuint, GLuint> getRenderBuffer();
+
+    std::pair<GLuint, GLuint> getmpBuffer();
 
     unsigned int getOffset();
 
@@ -169,6 +173,8 @@ private:
 
     GLuint renderVbo, renderFid;                    // render the image (copy from modelVbo)
 
+    GLuint tmpVbo, tmpFid;                          // tmp buffer
+
     GLuint unstableVbo;
 
     const int bufferSize;
@@ -182,6 +188,7 @@ private:
     unsigned int renderCount;
     unsigned int conflictCount;
     unsigned int unstableCount;
+    unsigned int tmpCount;
 
     std::shared_ptr<Shader> initProgram;
     std::shared_ptr<Shader> modelProgram;
