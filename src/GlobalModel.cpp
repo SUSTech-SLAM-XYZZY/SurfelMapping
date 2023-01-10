@@ -872,7 +872,10 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
         auto readyTransVertex = vertex.row(i);
         Eigen::Vector4f new_normal;
         // trans the vertex due to x & y
-        this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, ans(RSM::COLS::X), ans(RSM::COLS::Y));
+//        this->rotateNormal(readyTransVertex.head(4), readyTransVertex.tail(4), new_normal, view, ans(RSM::COLS::X), ans(RSM::COLS::Y));
+        std::cout << "=====1=====" << std::endl << new_normal.transpose() << std::endl;
+        std::cout << "=====2=====" << std::endl << readyTransVertex.tail(4) << std::endl;
+        std::cout << "=====3=====" << std::endl << ans.transpose() << std::endl;
         readyTransVertex.tail(4) = new_normal;
     }
     // transfrom it into renderBuffer
@@ -880,6 +883,8 @@ void GlobalModel::rsmTuning(const Eigen::Matrix4f &view, int frameid) {
     glBindBuffer(GL_ARRAY_BUFFER, renderVbo);
     glBufferData(GL_ARRAY_BUFFER, renderCount * Config::vertexSize(), vertex.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    free(vertexData);
 
     CheckGlDieOnError()
 }
@@ -1063,6 +1068,8 @@ double GlobalModel::getError(const Eigen::Matrix4f &view, int frameid){
 
     cv::Mat image(Config::H(), Config::W(), CV_8UC3);
     memcpy(image.data, texturePtr, Config::W() * Config::H() * 3);
+
+    delete(texturePtr);
 
     return this->getRGBImgLoss(image, frameid);
 }
